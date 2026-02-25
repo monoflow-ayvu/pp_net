@@ -15,13 +15,21 @@ defmodule PPNet.Message.Ping do
     @typedoc """
     The `PPNet.Message.Ping` struct
     """
-    field(:temperature, float())
-    field(:uptime_ms, integer())
+    field(:temperature, float(), enforce: true)
+    field(:uptime_ms, integer(), enforce: true)
+    field(:extra, map())
     field(:checksum, integer())
     field(:valid, boolean())
   end
 
   def type_code, do: @type_code
+
+  def pack(%__MODULE__{extra: extra} = message) when is_map(extra) do
+    Msgpax.pack!(
+      [message.temperature, message.uptime_ms, extra],
+      iodata: false
+    )
+  end
 
   def pack(%__MODULE__{} = message) do
     Msgpax.pack!(
@@ -36,8 +44,13 @@ defmodule PPNet.Message.Ping do
     end
   end
 
+  def parse([temperature, uptime_ms, extra])
+      when is_float(temperature) and is_integer(uptime_ms) and is_map(extra) do
+    {:ok, %Ping{temperature: temperature, uptime_ms: uptime_ms, extra: extra}}
+  end
+
   def parse([temperature, uptime_ms]) when is_float(temperature) and is_integer(uptime_ms) do
-    {:ok, %Ping{temperature: temperature, uptime_ms: uptime_ms}}
+    {:ok, %Ping{temperature: temperature, uptime_ms: uptime_ms, extra: %{}}}
   end
 
   def parse(unpacked_body) when is_list(unpacked_body) do

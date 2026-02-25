@@ -319,6 +319,21 @@ defmodule PPNetTest do
                 valid: true
               }} = PPNet.parse(payload)
     end
+
+    test "parse/1 with valid binary data and extra is present" do
+      payload =
+        <<0x05, 0x7E, 0x01, 0x0A, 0x2C, 0x93, 0xCB, 0x40, 0x39, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0xCD, 0x03, 0xE8, 0x82, 0xA3, 0x62, 0x61, 0x7A, 0x7B, 0xA3, 0x66, 0x6F, 0x6F,
+          0xA3, 0x62, 0x61, 0x72>>
+
+      assert {:ok,
+              %Ping{
+                temperature: 25.0,
+                uptime_ms: 1000,
+                extra: %{"foo" => "bar", "baz" => 123},
+                valid: true
+              }} = PPNet.parse(payload)
+    end
   end
 
   describe "encode PPNet.Message.Ping" do
@@ -352,6 +367,19 @@ defmodule PPNetTest do
                0xE8,
                "\n"
              >>
+    end
+
+    test "encode/1 with valid data and extra" do
+      message = %Ping{
+        temperature: 25.0,
+        uptime_ms: 1000,
+        extra: %{foo: "bar", baz: 123}
+      }
+
+      assert PPNet.encode_message(message, :raw) ==
+               <<0x05, 0x7E, 0x01, 0x0A, 0x2C, 0x93, 0xCB, 0x40, 0x39, 0x00, 0x00, 0x00, 0x00,
+                 0x00, 0x00, 0xCD, 0x03, 0xE8, 0x82, 0xA3, 0x62, 0x61, 0x7A, 0x7B, 0xA3, 0x66,
+                 0x6F, 0x6F, 0xA3, 0x62, 0x61, 0x72, "\n">>
     end
   end
 
