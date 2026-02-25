@@ -4,6 +4,8 @@ defmodule PPNetTest do
   alias PPNet.Message.Hello
   alias PPNet.Message.SingleCounter
   alias PPNet.Message.Ping
+  alias PPNet.Message.ImageHeader
+  alias PPNet.Message.ImageBody
 
   describe "decode PPNet.Message.Hello" do
     test "parse/1 with valid binary data" do
@@ -350,6 +352,37 @@ defmodule PPNetTest do
                0xE8,
                "\n"
              >>
+    end
+  end
+
+  describe "encode image" do
+    test "encode/1 with valid data" do
+      image = File.read!("test/support/static/image.webp")
+      [header | chunks] = PPNet.encode_image(image, 200, :raw)
+
+      assert {:ok, %ImageHeader{transaction_id: transaction_id, total_chunks: 140}} =
+               header
+               |> String.trim_trailing("\n")
+               |> PPNet.parse()
+
+      assert is_integer(transaction_id)
+
+      assert Enum.all?(chunks, fn chunk ->
+               {:ok,
+                %ImageBody{
+                  transaction_id: transaction_id,
+                  chunk_index: chunk_index,
+                  chunk_data: chunk_data
+                }} =
+                 chunk
+                 |> String.trim_trailing("\n")
+                 |> PPNet.parse()
+
+               assert is_integer(transaction_id)
+               assert is_integer(chunk_index)
+               assert is_binary(chunk_data)
+               assert byte_size(chunk_data) <= 200
+             end)
     end
   end
 
