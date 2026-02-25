@@ -18,9 +18,9 @@ end
 
 All multi-field messages are followed by a newline byte (`\n`, 1 byte) on the wire.
 
-### Common frame (types 1, 2 and 5)
+### Common frame (types 1, 2, 3 and 4)
 
-Messages of type Hello (1), SingleCounter (2) and Ping (5) use this frame:
+Messages of type Hello (1), SingleCounter (2), Ping (3) and Event (4) use this frame:
 
 | Field     | Type           | Bytes    |
 | --------- | -------------- | -------- |
@@ -52,7 +52,7 @@ Body is a msgpack array. Field sizes are variable (msgpack-encoded).
 | pulses      | integer | variable |
 | duration_ms | integer | variable |
 
-### Type 5 — Ping
+### Type 3 — Ping
 
 Body is a msgpack array. Field sizes are variable (msgpack-encoded).
 
@@ -61,7 +61,16 @@ Body is a msgpack array. Field sizes are variable (msgpack-encoded).
 | temperature | float  | variable |
 | uptime_ms   | integer | variable |
 
-### Type 3 — ImageHeader
+### Type 4 — Event
+
+Body is a msgpack array. Field sizes are variable (msgpack-encoded).
+
+| Field | Type  | Bytes    |
+| ----- | ----- | -------- |
+| kind  | atom  | variable |
+| data  | map   | variable |
+
+### Type 5 — ImageHeader
 
 Fixed-size binary (7 bytes total including type and newline).
 
@@ -72,7 +81,7 @@ Fixed-size binary (7 bytes total including type and newline).
 | total_chunks   | uint8 | 1     |
 | newline        | byte  | 1     |
 
-### Type 4 — ImageBody
+### Type 6 — ImageBody
 
 Binary; payload size is variable.
 
