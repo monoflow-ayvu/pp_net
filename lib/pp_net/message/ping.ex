@@ -9,7 +9,7 @@ defmodule PPNet.Message.Ping do
   alias PPNet.ParseError
 
   @derive Jason.Encoder
-  @type_code 5
+  @type_code 3
 
   typedstruct do
     @typedoc """

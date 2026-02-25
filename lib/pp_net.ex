@@ -8,22 +8,10 @@ defmodule PPNet do
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
   alias PPNet.Message.ImageHeader
+  alias PPNet.Message.Event
   alias PPNet.ParseError
 
   @targes [:raw, :suntech, :aovx]
-
-  def run do
-    %Hello{
-      unique_id: "TestRunner",
-      board_identifier: "Tester",
-      version: 1,
-      board_version: 1,
-      boot_id: 1,
-      ppnet_version: 1
-    }
-    |> encode_message(:raw)
-    |> dbg()
-  end
 
   def encode_message(%module{} = message, target \\ :raw)
       when module in [Hello, SingleCounter, Ping] and target in @targes do
@@ -88,7 +76,7 @@ defmodule PPNet do
           packaged_body::binary>> =
           data
       )
-      when type in [1, 2, 5] do
+      when type in [1, 2, 3, 4] do
     case to_message_type(type).parse(packaged_body) do
       {:ok, body} ->
         {:ok, struct(body, checksum: checksum, valid: :erlang.adler32(packaged_body) == checksum)}
@@ -104,14 +92,14 @@ defmodule PPNet do
   end
 
   def parse(
-        <<3::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
+        <<5::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
           total_chunks::unsigned-integer-size(1)-unit(8)>>
       ) do
     {:ok, %ImageHeader{transaction_id: transaction_id, total_chunks: total_chunks}}
   end
 
   def parse(
-        <<4::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
+        <<6::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
           chunk_index::unsigned-integer-size(1)-unit(8), chunk_data::binary>>
       ) do
     {:ok,
@@ -129,7 +117,8 @@ defmodule PPNet do
 
   defp to_message_type(1), do: Hello
   defp to_message_type(2), do: SingleCounter
-  defp to_message_type(5), do: Ping
+  defp to_message_type(3), do: Ping
+  defp to_message_type(4), do: Event
 
   defp valid_total_size(:raw, total_size) when total_size > 255,
     do: raise("Total size must be less than 255")

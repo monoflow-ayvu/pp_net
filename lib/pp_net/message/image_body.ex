@@ -5,7 +5,7 @@ defmodule PPNet.Message.ImageBody do
   """
   use TypedStruct
 
-  @type_code 4
+  @type_code 6
 
   typedstruct do
     field(:transaction_id, non_neg_integer(), enforce: true)
