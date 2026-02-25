@@ -5,9 +5,12 @@ defmodule PPNet do
   """
   alias PPNet.Message.Hello
   alias PPNet.Message.ImageBody
-  alias PPNet.Message.ImageHeader
+  alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
+  alias PPNet.Message.ImageHeader
   alias PPNet.ParseError
+
+  @targes [:raw, :suntech, :aovx]
 
   def run do
     %Hello{
@@ -22,7 +25,8 @@ defmodule PPNet do
     |> dbg()
   end
 
-  def encode_message(%module{} = message, target) when module in [Hello, SingleCounter] do
+  def encode_message(%module{} = message, target \\ :raw)
+      when module in [Hello, SingleCounter, Ping] and target in @targes do
     packaged_data = module.pack(message)
 
     total_size = 1 + 4 + byte_size(packaged_data)
@@ -33,7 +37,8 @@ defmodule PPNet do
     <<
       module.type_code()::unsigned-integer-size(1)-unit(8),
       checksum::32-big-unsigned-integer,
-      packaged_data::binary
+      packaged_data::binary-size(byte_size(packaged_data))-unit(8),
+      "\n"
     >>
   end
 
@@ -55,7 +60,7 @@ defmodule PPNet do
         ImageHeader.pack(%ImageHeader{
           transaction_id: transaction_id,
           total_chunks: total_chunks
-        })
+        }) <> "\n"
 
     messages =
       for {chunk, index} <- Enum.with_index(chunks) do
@@ -64,7 +69,7 @@ defmodule PPNet do
             transaction_id: transaction_id,
             chunk_index: index,
             chunk_data: :binary.list_to_bin(chunk)
-          })
+          }) <> "\n"
       end
 
     [header | messages]
@@ -83,7 +88,7 @@ defmodule PPNet do
           packaged_body::binary>> =
           data
       )
-      when type in [1, 2] do
+      when type in [1, 2, 5] do
     case to_message_type(type).parse(packaged_body) do
       {:ok, body} ->
         {:ok, struct(body, checksum: checksum, valid: :erlang.adler32(packaged_body) == checksum)}
@@ -124,6 +129,7 @@ defmodule PPNet do
 
   defp to_message_type(1), do: Hello
   defp to_message_type(2), do: SingleCounter
+  defp to_message_type(5), do: Ping
 
   defp valid_total_size(:raw, total_size) when total_size > 255,
     do: raise("Total size must be less than 255")

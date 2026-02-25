@@ -3,6 +3,7 @@ defmodule PPNetTest do
 
   alias PPNet.Message.Hello
   alias PPNet.Message.SingleCounter
+  alias PPNet.Message.Ping
 
   describe "decode PPNet.Message.Hello" do
     test "parse/1 with valid binary data" do
@@ -162,7 +163,8 @@ defmodule PPNetTest do
                0x35,
                0x34,
                0x56,
-               0x01
+               0x01,
+               "\n"
              >>
     end
   end
@@ -275,7 +277,78 @@ defmodule PPNetTest do
                0x00,
                0xCD,
                0x05,
-               0xDC
+               0xDC,
+               "\n"
+             >>
+    end
+  end
+
+  describe "decode PPNet.Message.Ping" do
+    test "parse/1 with valid binary data" do
+      payload = <<
+        # message type
+        0x05,
+        # checksum (adler32)
+        0x19,
+        0x4A,
+        0x03,
+        0x8F,
+        # body (msgpack)
+        0x92,
+        0xCB,
+        0x40,
+        0x39,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0xCD,
+        0x03,
+        0xE8
+      >>
+
+      assert {:ok,
+              %PPNet.Message.Ping{
+                checksum: 424_280_975,
+                temperature: 25.0,
+                uptime_ms: 1000,
+                valid: true
+              }} = PPNet.parse(payload)
+    end
+  end
+
+  describe "encode PPNet.Message.Ping" do
+    test "encode/1 with valid data" do
+      message = %Ping{
+        temperature: 25.0,
+        uptime_ms: 1000
+      }
+
+      assert PPNet.encode_message(message, :raw) == <<
+               # message type
+               0x05,
+               # checksum (adler32)
+               0x19,
+               0x4A,
+               0x03,
+               0x8F,
+               # body (msgpack)
+               0x92,
+               0xCB,
+               0x40,
+               0x39,
+               0x00,
+               0x00,
+               0x00,
+               0x00,
+               0x00,
+               0x00,
+               0xCD,
+               0x03,
+               0xE8,
+               "\n"
              >>
     end
   end
