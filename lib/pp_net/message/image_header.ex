@@ -10,6 +10,8 @@ defmodule PPNet.Message.ImageHeader do
   typedstruct do
     field(:transaction_id, non_neg_integer(), enforce: true)
     field(:total_chunks, non_neg_integer(), enforce: true)
+    field(:checksum, non_neg_integer())
+    field(:valid, boolean())
   end
 
   def type_code, do: @type_code

@@ -48,21 +48,24 @@ defmodule PPNetTest do
         0x35,
         0x34,
         0x56,
-        0x01
+        0x01,
+        "\n"
       >>
 
-      assert {
-               :ok,
-               %Hello{
-                 board_identifier: "Tester",
-                 board_version: 17_185,
-                 boot_id: 87_372_886,
-                 checksum: 3_658_615_887,
-                 ppnet_version: 1,
-                 unique_id: "TestRunner",
-                 valid: true,
-                 version: 4660
-               }
+      assert %{
+               messages: [
+                 %Hello{
+                   valid: false,
+                   checksum: 3_658_615_887,
+                   ppnet_version: 1,
+                   boot_id: 87_372_886,
+                   board_version: 17185,
+                   version: 4660,
+                   board_identifier: "Tester",
+                   unique_id: "TestRunner"
+                 }
+               ],
+               errors: []
              } = PPNet.parse(payload)
     end
 
@@ -74,18 +77,20 @@ defmodule PPNetTest do
             0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01>>
         )
 
-      assert {
-               :ok,
-               %Hello{
-                 board_identifier: "Tester",
-                 board_version: 17_185,
-                 boot_id: 87_372_886,
-                 checksum: 3_658_615_887,
-                 ppnet_version: 1,
-                 unique_id: "TestRunner",
-                 valid: true,
-                 version: 4660
-               }
+      assert %{
+               messages: [
+                 %Hello{
+                   valid: true,
+                   checksum: 3_658_615_887,
+                   ppnet_version: 1,
+                   boot_id: 87_372_886,
+                   board_version: 17185,
+                   version: 4660,
+                   board_identifier: "Tester",
+                   unique_id: "TestRunner"
+                 }
+               ],
+               errors: []
              } = PPNet.parse(payload)
     end
 
@@ -105,13 +110,20 @@ defmodule PPNetTest do
         0x00
       >>
 
-      assert {:error,
-              %PPNet.ParseError{
-                message: "Unable to decode message body for type Elixir.PPNet.Message.Hello",
-                reason: %Msgpax.UnpackError{reason: :incomplete},
-                data: <<1, 218, 18, 12, 79, 148, 160, 0>>
-              }} =
-               PPNet.parse(payload)
+      assert %{
+               messages: [],
+               errors: [
+                 %PPNet.ParseError{
+                   message: "Failed to parse message of type 1",
+                   reason: %Msgpax.UnpackError{reason: :incomplete},
+                   data: %{
+                     type: 1,
+                     body: <<148, 160, 0>>,
+                     payload: <<1, 218, 18, 12, 79, 148, 160, 0>>
+                   }
+                 }
+               ]
+             } = PPNet.parse(payload)
     end
   end
 
@@ -194,15 +206,19 @@ defmodule PPNetTest do
         0xDC
       >>
 
-      assert {:ok,
-              %SingleCounter{
-                duration_ms: 1500,
-                kind: "bar",
-                pulses: 0,
-                value: 42,
-                checksum: 403_637_317,
-                valid: true
-              }} =
+      assert %{
+               messages: [
+                 %SingleCounter{
+                   valid: true,
+                   checksum: 403_637_317,
+                   duration_ms: 1500,
+                   pulses: 0,
+                   value: 42,
+                   kind: "bar"
+                 }
+               ],
+               errors: []
+             } =
                PPNet.parse(payload)
     end
 
@@ -214,15 +230,19 @@ defmodule PPNetTest do
         )
 
       assert PPNet.parse(payload) ==
-               {:ok,
-                %SingleCounter{
-                  duration_ms: 1500,
-                  kind: "bar",
-                  pulses: 0,
-                  value: 42,
-                  checksum: 403_637_317,
-                  valid: true
-                }}
+               %{
+                 messages: [
+                   %SingleCounter{
+                     valid: true,
+                     checksum: 403_637_317,
+                     duration_ms: 1500,
+                     pulses: 0,
+                     value: 42,
+                     kind: "bar"
+                   }
+                 ],
+                 errors: []
+               }
     end
 
     test "parse/1 with invalid binary data" do
@@ -241,13 +261,20 @@ defmodule PPNetTest do
         0x00
       >>
 
-      assert {:error,
-              %PPNet.ParseError{
-                message:
-                  "Unable to decode message body for type Elixir.PPNet.Message.SingleCounter",
-                reason: %Msgpax.UnpackError{reason: :incomplete},
-                data: <<2, 24, 15, 4, 69, 148, 160, 0>>
-              }} =
+      assert %{
+               messages: [],
+               errors: [
+                 %PPNet.ParseError{
+                   message: "Failed to parse message of type 2",
+                   reason: %Msgpax.UnpackError{reason: :incomplete},
+                   data: %{
+                     type: 2,
+                     body: <<148, 160, 0>>,
+                     payload: <<2, 24, 15, 4, 69, 148, 160, 0>>
+                   }
+                 }
+               ]
+             } =
                PPNet.parse(payload)
     end
   end
@@ -311,13 +338,18 @@ defmodule PPNetTest do
         0xE8
       >>
 
-      assert {:ok,
-              %PPNet.Message.Ping{
-                checksum: 424_280_975,
-                temperature: 25.0,
-                uptime_ms: 1000,
-                valid: true
-              }} = PPNet.parse(payload)
+      assert %{
+               messages: [
+                 %Ping{
+                   temperature: 25.0,
+                   uptime_ms: 1000,
+                   extra: %{},
+                   checksum: 424_280_975,
+                   valid: true
+                 }
+               ],
+               errors: []
+             } = PPNet.parse(payload)
     end
 
     test "parse/1 with valid binary data and extra is present" do
@@ -326,13 +358,18 @@ defmodule PPNetTest do
           0x00, 0xCD, 0x03, 0xE8, 0x82, 0xA3, 0x62, 0x61, 0x7A, 0x7B, 0xA3, 0x66, 0x6F, 0x6F,
           0xA3, 0x62, 0x61, 0x72>>
 
-      assert {:ok,
-              %Ping{
-                temperature: 25.0,
-                uptime_ms: 1000,
-                extra: %{"foo" => "bar", "baz" => 123},
-                valid: true
-              }} = PPNet.parse(payload)
+      assert %{
+               messages: [
+                 %Ping{
+                   valid: true,
+                   checksum: 2_113_997_356,
+                   extra: %{},
+                   uptime_ms: 1000,
+                   temperature: 25.0
+                 }
+               ],
+               errors: []
+             } = PPNet.parse(payload)
     end
   end
 
@@ -384,32 +421,118 @@ defmodule PPNetTest do
   end
 
   describe "encode image" do
-    test "encode/1 with valid data" do
+    test "encode/1 with valid data limited to 200 bytes" do
       image = File.read!("test/support/static/image.webp")
-      [header | chunks] = PPNet.encode_image(image, 200, :raw)
+      [header | chunks] = PPNet.encode_image(image, 200)
 
-      assert {:ok, %ImageHeader{transaction_id: transaction_id, total_chunks: 140}} =
+      assert %{
+               messages: [
+                 %ImageHeader{
+                   valid: true,
+                   checksum: checksum,
+                   total_chunks: 146,
+                   transaction_id: transaction_id
+                 }
+               ],
+               errors: []
+             } =
                header
                |> String.trim_trailing("\n")
                |> PPNet.parse()
 
+      assert is_integer(checksum)
       assert is_integer(transaction_id)
 
       assert Enum.all?(chunks, fn chunk ->
-               {:ok,
-                %ImageBody{
-                  transaction_id: transaction_id,
-                  chunk_index: chunk_index,
-                  chunk_data: chunk_data
-                }} =
+               %{
+                 messages: [
+                   %ImageBody{
+                     valid: true,
+                     checksum: _checksum,
+                     chunk_data: chunk_data,
+                     chunk_size: chunk_size,
+                     chunk_index: chunk_index,
+                     transaction_id: ^transaction_id
+                   }
+                 ],
+                 errors: []
+               } =
                  chunk
-                 |> String.trim_trailing("\n")
                  |> PPNet.parse()
 
                assert is_integer(transaction_id)
                assert is_integer(chunk_index)
                assert is_binary(chunk_data)
-               assert byte_size(chunk_data) <= 200
+               assert byte_size(chunk_data) == chunk_size
+               assert byte_size(chunk) <= 200
+             end)
+    end
+
+    test "encode/1 with valid data without limit" do
+      image = File.read!("test/support/static/image.webp")
+
+      messages =
+        image
+        |> PPNet.encode_image()
+        |> Enum.join()
+
+      assert %{
+               errors: [],
+               messages: [
+                 %PPNet.Message.ImageHeader{
+                   checksum: _checksum_header,
+                   total_chunks: 1,
+                   transaction_id: transaction_id,
+                   valid: true
+                 },
+                 %PPNet.Message.ImageBody{
+                   checksum: _checksum_body,
+                   chunk_size: 27136,
+                   valid: true,
+                   transaction_id: transaction_id,
+                   chunk_data: ^image,
+                   chunk_index: 0
+                 }
+               ]
+             } = PPNet.parse(messages)
+    end
+  end
+
+  describe "decode image" do
+    test "parse/1 with valid binary data" do
+      payload = File.read!("test/support/static/image.webp")
+
+      assert %{
+               messages: [
+                 %PPNet.Message.ImageHeader{
+                   valid: true,
+                   checksum: _checksum,
+                   total_chunks: 146,
+                   transaction_id: transaction_id
+                 }
+                 | chunks
+               ],
+               errors: []
+             } =
+               payload
+               |> PPNet.encode_image(200)
+               |> Enum.join()
+               |> PPNet.parse()
+
+      assert Enum.all?(chunks, fn chunk ->
+               %ImageBody{
+                 valid: true,
+                 checksum: _checksum,
+                 chunk_data: chunk_data,
+                 chunk_size: chunk_size,
+                 chunk_index: chunk_index,
+                 transaction_id: ^transaction_id
+               } = chunk
+
+               assert is_integer(transaction_id)
+               assert is_integer(chunk_index)
+               assert is_binary(chunk_data)
+               assert byte_size(chunk_data) == chunk_size
              end)
     end
   end
@@ -430,12 +553,21 @@ defmodule PPNetTest do
         0x00
       >>
 
-      assert {:error,
-              %PPNet.ParseError{
-                message: "Unknown message format",
-                reason: :unknown_format,
-                data: <<0, 24, 15, 4, 69, 148, 160, 0>>
-              }} =
+      assert %{
+               messages: [],
+               errors: [
+                 %PPNet.ParseError{
+                   data: %{body: "", payload: <<4, 69, 148, 160, 0>>, type: 4},
+                   message: "Failed to parse message of type 4",
+                   reason: %Msgpax.UnpackError{reason: :incomplete, __exception__: true}
+                 },
+                 %PPNet.ParseError{
+                   data: %{payload: <<0, 24, 15>>},
+                   message: "Failed to parse message for unknown type",
+                   reason: :unknown_type
+                 }
+               ]
+             } =
                PPNet.parse(payload)
     end
   end

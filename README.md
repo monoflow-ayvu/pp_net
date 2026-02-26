@@ -1,5 +1,6 @@
 # PpNet
 
+**TODO: Add description**
 
 ## Installation
 
@@ -16,21 +17,21 @@ end
 
 ## Message structure
 
-All multi-field messages are followed by a newline byte (`\n`, 1 byte) on the wire.
+When encoding, messages may be followed by a newline byte (`\n`, 1 byte). Payloads can contain `\n`; use `PPNet.parse_stream/1` for concatenated messages.
 
 ### Common frame (types 1, 2, 3 and 4)
 
-Messages of type Hello (1), SingleCounter (2), Ping (3) and Event (4) use this frame:
+Hello (1), SingleCounter (2), Ping (3) and Event (4) use this frame:
 
-| Field     | Type           | Bytes    |
-| --------- | -------------- | -------- |
-| type      | uint8          | 1        |
-| checksum  | uint32 (big)   | 4        |
-| body      | msgpack binary | variable |
+| Field    | Type           | Bytes    |
+| -------- | -------------- | -------- |
+| type     | uint8          | 1        |
+| checksum | uint32 (big)   | 4        |
+| body     | msgpack binary | variable |
 
 ### Type 1 — Hello
 
-Body is a msgpack array. Field sizes are variable (msgpack-encoded).
+Body: msgpack array. All field sizes variable (msgpack-encoded).
 
 | Field            | Type    | Bytes    |
 | ---------------- | ------- | -------- |
@@ -43,7 +44,7 @@ Body is a msgpack array. Field sizes are variable (msgpack-encoded).
 
 ### Type 2 — SingleCounter
 
-Body is a msgpack array. Field sizes are variable (msgpack-encoded).
+Body: msgpack array. All field sizes variable (msgpack-encoded).
 
 | Field       | Type    | Bytes    |
 | ----------- | ------- | -------- |
@@ -54,16 +55,17 @@ Body is a msgpack array. Field sizes are variable (msgpack-encoded).
 
 ### Type 3 — Ping
 
-Body is a msgpack array. Field sizes are variable (msgpack-encoded).
+Body: msgpack array. All field sizes variable (msgpack-encoded).
 
 | Field       | Type   | Bytes    |
 | ----------- | ------ | -------- |
 | temperature | float  | variable |
 | uptime_ms   | integer | variable |
+| extra       | map    | variable (optional) |
 
 ### Type 4 — Event
 
-Body is a msgpack array. Field sizes are variable (msgpack-encoded).
+Body: msgpack array. All field sizes variable (msgpack-encoded).
 
 | Field | Type  | Bytes    |
 | ----- | ----- | -------- |
@@ -72,25 +74,24 @@ Body is a msgpack array. Field sizes are variable (msgpack-encoded).
 
 ### Type 5 — ImageHeader
 
-Fixed-size binary (7 bytes total including type and newline).
+Fixed-size binary: 6 bytes (no checksum on wire).
 
-| Field          | Type  | Bytes |
-| -------------- | ----- | ----- |
-| type           | uint8 | 1     |
+| Field          | Type   | Bytes |
+| -------------- | ------ | ----- |
+| type           | uint8  | 1     |
 | transaction_id | uint32 | 4     |
-| total_chunks   | uint8 | 1     |
-| newline        | byte  | 1     |
+| total_chunks   | uint8  | 1     |
 
 ### Type 6 — ImageBody
 
-Binary; payload size is variable.
+Binary: 8-byte header + `chunk_size` bytes of payload. `chunk_size` is the length of `chunk_data`.
 
 | Field          | Type   | Bytes    |
 | -------------- | ------ | -------- |
 | type           | uint8  | 1        |
 | transaction_id | uint32 | 4        |
 | chunk_index    | uint8  | 1        |
-| chunk_data     | binary | variable |
-| newline        | byte   | 1        |
+| chunk_size     | uint16 | 2        |
+| chunk_data     | binary | chunk_size |
 
 

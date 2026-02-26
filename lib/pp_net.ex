@@ -11,14 +11,25 @@ defmodule PPNet do
   alias PPNet.Message.Event
   alias PPNet.ParseError
 
-  @targes [:raw, :suntech, :aovx]
+  def run do
+    image = File.read!("test/support/static/image.webp")
 
-  def encode_message(%module{} = message, target \\ :raw)
-      when module in [Hello, SingleCounter, Ping] and target in @targes do
+    limit = 200
+    messages = encode_image(image, limit)
+
+    IO.puts("Binary size: #{byte_size(image)}")
+    IO.puts("Total messages: #{length(messages)} + 1 header message")
+    IO.puts("ImageBody header size: 7")
+    IO.puts("ImageBody chunk size: 200")
+    IO.puts("Bynary bytes per message: #{limit - 13}")
+    IO.puts("Total overhead: #{100 * 13 / limit}%")
+  end
+
+  def encode_message(%module{} = message, limit \\ :unlimited) do
     packaged_data = module.pack(message)
 
     total_size = 1 + 4 + byte_size(packaged_data)
-    valid_total_size(target, total_size)
+    valid_total_size(limit, total_size)
 
     checksum = :erlang.adler32(packaged_data)
 
@@ -30,34 +41,44 @@ defmodule PPNet do
     >>
   end
 
-  def encode_image(binary, chunk_size, target) do
-    valid_total_size(target, chunk_size)
-
-    chunk_header_size = 6
+  def encode_image(binary, chunk_size \\ :unlimited) do
+    # type (1 byte) + checksum (4 bytes) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (2 bytes) + \n (1 byte)
+    chunk_header_size = 13
     transaction_id = transaction_id()
 
     chunks =
-      binary
-      |> :binary.bin_to_list()
-      |> Enum.chunk_every(chunk_size - chunk_header_size)
+      case chunk_size do
+        :unlimited ->
+          [binary]
+
+        size when is_integer(size) and size > chunk_header_size ->
+          binary
+          |> :binary.bin_to_list()
+          |> Enum.chunk_every(chunk_size - chunk_header_size)
+          |> Enum.map(&IO.iodata_to_binary/1)
+      end
 
     total_chunks = length(chunks)
 
     header =
-      <<ImageHeader.type_code()::unsigned-integer-size(1)-unit(8)>> <>
-        ImageHeader.pack(%ImageHeader{
+      encode_message(
+        %ImageHeader{
           transaction_id: transaction_id,
           total_chunks: total_chunks
-        }) <> "\n"
+        },
+        chunk_size
+      )
 
     messages =
       for {chunk, index} <- Enum.with_index(chunks) do
-        <<ImageBody.type_code()::unsigned-integer-size(1)-unit(8)>> <>
-          ImageBody.pack(%ImageBody{
+        encode_message(
+          %ImageBody{
             transaction_id: transaction_id,
             chunk_index: index,
-            chunk_data: :binary.list_to_bin(chunk)
-          }) <> "\n"
+            chunk_data: chunk
+          },
+          chunk_size
+        )
       end
 
     [header | messages]
@@ -66,53 +87,129 @@ defmodule PPNet do
   @doc """
   Parses a binary or list representation of a message into a struct.
   """
-  @spec parse(binary() | list(integer())) ::
-          {:ok, Hello.t() | SingleCounter.t()} | {:error, ParseError.t()}
 
   def parse(data) when is_list(data), do: parse(IO.iodata_to_binary(data))
 
-  def parse(
-        <<type::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
-          packaged_body::binary>> =
-          data
-      )
-      when type in [1, 2, 3, 4] do
-    case to_message_type(type).parse(packaged_body) do
-      {:ok, body} ->
-        {:ok, struct(body, checksum: checksum, valid: :erlang.adler32(packaged_body) == checksum)}
+  def parse(binary) when is_binary(binary) do
+    {messages, errors} = decode_line(binary)
 
+    %{messages: messages, errors: errors}
+  end
+
+  defp decode_line(data, messages \\ [], errors \\ [], buffer \\ <<>>)
+
+  defp decode_line(<<>>, messages, errors, <<>>) do
+    {Enum.reverse(messages), Enum.reverse(errors)}
+  end
+
+  defp decode_line(<<>>, messages, errors, buffer) do
+    error = build_error(buffer)
+
+    {Enum.reverse(messages), Enum.reverse([error | errors])}
+  end
+
+  defp decode_line("\n", messages, errors, buffer) do
+    decode_line(<<>>, messages, errors, buffer)
+  end
+
+  defp decode_line(
+         <<type::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
+           packaged_body::binary>> = data,
+         messages,
+         errors,
+         buffer
+       )
+       when type in [1, 2, 3, 4] do
+    with {:ok, body, rest} <- Msgpax.unpack_slice(packaged_body),
+         {:ok, message} <- to_message_type(type).parse(body) do
+      message =
+        struct(message, checksum: checksum, valid: :erlang.adler32(packaged_body) == checksum)
+
+      decode_line(rest, [message | messages], errors, buffer)
+    else
       {:error, reason} ->
-        {:error,
-         %ParseError{
-           message: "Unable to decode message body for type #{to_message_type(type)}",
-           reason: reason,
-           data: data
-         }}
+        error = build_error(type, packaged_body, reason, data)
+        decode_line(<<>>, messages, [error | errors], buffer)
     end
   end
 
-  def parse(
-        <<5::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
+  defp decode_line(
+         <<5::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
+           transaction_id::unsigned-integer-size(4)-unit(8),
+           total_chunks::unsigned-integer-size(1)-unit(8), rest::binary>>,
+         messages,
+         errors,
+         buffer
+       ) do
+    valid =
+      :erlang.adler32(
+        <<transaction_id::unsigned-integer-size(4)-unit(8),
           total_chunks::unsigned-integer-size(1)-unit(8)>>
-      ) do
-    {:ok, %ImageHeader{transaction_id: transaction_id, total_chunks: total_chunks}}
+      ) == checksum
+
+    message = %ImageHeader{
+      transaction_id: transaction_id,
+      total_chunks: total_chunks,
+      checksum: checksum,
+      valid: valid
+    }
+
+    decode_line(rest, [message | messages], errors, buffer)
   end
 
-  def parse(
-        <<6::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
-          chunk_index::unsigned-integer-size(1)-unit(8), chunk_data::binary>>
-      ) do
-    {:ok,
-     %ImageBody{transaction_id: transaction_id, chunk_index: chunk_index, chunk_data: chunk_data}}
+  defp decode_line(
+         <<6::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
+           transaction_id::unsigned-integer-size(4)-unit(8),
+           chunk_index::unsigned-integer-size(1)-unit(8),
+           chunk_size::unsigned-integer-size(2)-unit(8),
+           chunk_data::binary-size(chunk_size)-unit(8), rest::binary>>,
+         messages,
+         errors,
+         buffer
+       ) do
+    valid =
+      :erlang.adler32(
+        <<transaction_id::unsigned-integer-size(4)-unit(8),
+          chunk_index::unsigned-integer-size(1)-unit(8),
+          chunk_size::unsigned-integer-size(2)-unit(8),
+          chunk_data::binary-size(chunk_size)-unit(8)>>
+      ) == checksum
+
+    message = %ImageBody{
+      transaction_id: transaction_id,
+      chunk_index: chunk_index,
+      chunk_data: chunk_data,
+      chunk_size: chunk_size,
+      checksum: checksum,
+      valid: valid
+    }
+
+    decode_line(rest, [message | messages], errors, buffer)
   end
 
-  def parse(data) do
-    {:error,
-     %ParseError{
-       message: "Unknown message format",
-       reason: :unknown_format,
-       data: data
-     }}
+  # If the line starts with a newline, we skip it and continue decoding the rest of the binary.
+  defp decode_line(<<"\n", rest::binary>>, messages, errors, buffer) do
+    decode_line(rest, messages, errors, buffer)
+  end
+
+  defp decode_line(<<byte_to_skip::size(1)-unit(8), rest::binary>>, messages, errors, buffer) do
+    decode_line(rest, messages, errors, <<buffer::binary, byte_to_skip::size(1)-unit(8)>>)
+  end
+
+  defp build_error(type, body, reason, payload) do
+    %ParseError{
+      message: "Failed to parse message of type #{type}",
+      reason: reason,
+      data: %{type: type, body: body, payload: payload}
+    }
+  end
+
+  defp build_error(payload) do
+    %ParseError{
+      message: "Failed to parse message for unknown type",
+      reason: :unknown_type,
+      data: %{payload: payload}
+    }
   end
 
   defp to_message_type(1), do: Hello
@@ -120,14 +217,8 @@ defmodule PPNet do
   defp to_message_type(3), do: Ping
   defp to_message_type(4), do: Event
 
-  defp valid_total_size(:raw, total_size) when total_size > 255,
-    do: raise("Total size must be less than 255")
-
-  defp valid_total_size(:suntech, total_size) when total_size > 255,
-    do: raise("Total size must be less than 255")
-
-  defp valid_total_size(:aovx, total_size) when total_size > 200,
-    do: raise("Total size must be less than 200")
+  defp valid_total_size(limit, total_size) when is_integer(limit) and total_size > limit,
+    do: raise("Total size must be less than or equal #{limit}")
 
   defp valid_total_size(_, _), do: :ok
 
