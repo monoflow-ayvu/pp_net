@@ -42,7 +42,7 @@ defmodule PPNet do
 
   def encode_image(binary, chunk_size \\ :unlimited) do
     # type (1 byte) + checksum (4 bytes) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (2 bytes)
-    chunk_header_size = 13
+    chunk_header_size = 12
     transaction_id = transaction_id()
 
     chunks =
