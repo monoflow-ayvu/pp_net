@@ -481,7 +481,7 @@ defmodule PPNetTest do
                  %ImageHeader{
                    valid: true,
                    checksum: checksum,
-                   total_chunks: 146,
+                   total_chunks: 145,
                    transaction_id: transaction_id
                  }
                ],
@@ -555,7 +555,7 @@ defmodule PPNetTest do
                  %PPNet.Message.ImageHeader{
                    valid: true,
                    checksum: _checksum,
-                   total_chunks: 146,
+                   total_chunks: 145,
                    transaction_id: transaction_id
                  }
                  | chunks
