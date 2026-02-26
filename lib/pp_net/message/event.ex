@@ -9,8 +9,10 @@ defmodule PPNet.Message.Event do
   @type_code 4
 
   typedstruct do
-    field(:kind, atom(), enforce: true)
+    field(:kind, String.t(), enforce: true)
     field(:data, map(), enforce: true)
+    field(:checksum, integer())
+    field(:valid, boolean())
   end
 
   def type_code, do: @type_code
@@ -28,7 +30,7 @@ defmodule PPNet.Message.Event do
     end
   end
 
-  def parse([kind, data]) when is_atom(kind) and is_map(data) do
+  def parse([kind, data]) when is_binary(kind) and is_map(data) do
     {:ok, %__MODULE__{kind: kind, data: data}}
   end
 

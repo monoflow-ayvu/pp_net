@@ -36,13 +36,12 @@ defmodule PPNet do
     <<
       module.type_code()::unsigned-integer-size(1)-unit(8),
       checksum::32-big-unsigned-integer,
-      packaged_data::binary-size(byte_size(packaged_data))-unit(8),
-      "\n"
+      packaged_data::binary-size(byte_size(packaged_data))-unit(8)
     >>
   end
 
   def encode_image(binary, chunk_size \\ :unlimited) do
-    # type (1 byte) + checksum (4 bytes) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (2 bytes) + \n (1 byte)
+    # type (1 byte) + checksum (4 bytes) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (2 bytes)
     chunk_header_size = 13
     transaction_id = transaction_id()
 
@@ -108,10 +107,6 @@ defmodule PPNet do
     {Enum.reverse(messages), Enum.reverse([error | errors])}
   end
 
-  defp decode_line("\n", messages, errors, buffer) do
-    decode_line(<<>>, messages, errors, buffer)
-  end
-
   defp decode_line(
          <<type::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
            packaged_body::binary>> = data,
@@ -123,13 +118,23 @@ defmodule PPNet do
     with {:ok, body, rest} <- Msgpax.unpack_slice(packaged_body),
          {:ok, message} <- to_message_type(type).parse(body) do
       message =
-        struct(message, checksum: checksum, valid: :erlang.adler32(packaged_body) == checksum)
+        struct(message,
+          checksum: checksum,
+          valid: :erlang.adler32(to_message_type(type).pack(message)) == checksum
+        )
 
       decode_line(rest, [message | messages], errors, buffer)
     else
       {:error, reason} ->
         error = build_error(type, packaged_body, reason, data)
-        decode_line(<<>>, messages, [error | errors], buffer)
+        <<skip::binary-size(1)-unit(8), rest::binary>> = data
+
+        decode_line(
+          rest,
+          messages,
+          [error | errors],
+          <<buffer::binary, skip::binary-size(1)-unit(8)>>
+        )
     end
   end
 
