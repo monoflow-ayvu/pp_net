@@ -10,7 +10,7 @@ defmodule PPNet.Message.Event do
 
   typedstruct do
     field(:kind, String.t(), enforce: true)
-    field(:data, map(), enforce: true)
+    field(:data, %{optional(String.t()) => any()}, enforce: true)
     field(:checksum, integer())
     field(:valid, boolean())
   end
