@@ -11,6 +11,10 @@ defmodule PPNet do
   alias PPNet.Message.Event
   alias PPNet.ParseError
 
+  # Reed-Solomon is limited to 255 bytes inclusive
+  # Cops is limited to 255 bytes exclusive
+  @limit 254
+
   def run do
     image = File.read!("test/support/static/image.webp")
 
@@ -25,37 +29,42 @@ defmodule PPNet do
     IO.puts("Total overhead: #{100 * 13 / limit}%")
   end
 
-  def encode_message(%module{} = message, limit \\ :unlimited) do
+  def encode_message(%module{} = message, limit \\ @limit) when limit <= @limit do
     packaged_data = module.pack(message)
 
-    total_size = 1 + 4 + byte_size(packaged_data)
-    valid_total_size(limit, total_size)
+    # type (1 byte) + checksum (4 bytes) + packaged_data + separator (1 byte)
+    total_size = 1 + 4 + 1 + 4 + byte_size(packaged_data)
+    cops_overhead = ceil(total_size / 254)
+    valid_total_size(limit, total_size + cops_overhead)
 
     checksum = :erlang.adler32(packaged_data)
 
-    <<
+    message = <<
       module.type_code()::unsigned-integer-size(1)-unit(8),
       checksum::32-big-unsigned-integer,
       packaged_data::binary-size(byte_size(packaged_data))-unit(8)
     >>
+
+    {:ok, rs_encoded} = ReedSolomonEx.encode(message, 4)
+
+    rs_encoded
+    |> Cobs.encode!()
+    |> Kernel.<>(<<0>>)
   end
 
-  def encode_image(binary, chunk_size \\ :unlimited) do
+  def encode_image(binary, chunk_size \\ @limit) do
     # type (1 byte) + checksum (4 bytes) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (2 bytes)
-    chunk_header_size = 12
+    # + ReedSolomon overhead (4 bytes) + separator (1 byte)
+    chunk_header_size = 17
     transaction_id = transaction_id()
 
-    chunks =
-      case chunk_size do
-        :unlimited ->
-          [binary]
+    cops_overhead = ceil(chunk_size / 254)
 
-        size when is_integer(size) and size > chunk_header_size ->
-          binary
-          |> :binary.bin_to_list()
-          |> Enum.chunk_every(chunk_size - chunk_header_size)
-          |> Enum.map(&IO.iodata_to_binary/1)
-      end
+    chunks =
+      binary
+      |> :binary.bin_to_list()
+      |> Enum.chunk_every(chunk_size - chunk_header_size - cops_overhead)
+      |> Enum.map(&IO.iodata_to_binary/1)
 
     total_chunks = length(chunks)
 
@@ -90,61 +99,75 @@ defmodule PPNet do
   def parse(data) when is_list(data), do: parse(IO.iodata_to_binary(data))
 
   def parse(binary) when is_binary(binary) do
-    {messages, errors} = decode_line(binary)
+    binary
+    |> :binary.split(<<0>>, [:global, :trim])
+    |> Enum.reduce({[], []}, fn cobs_encoded, {messages, errors} ->
+      with {:ok, cobs_decoded} <- cobs_decode(cobs_encoded),
+           {:ok, rs_corrected} <- rs_correct(cobs_decoded),
+           {:ok, message} <- decode_line(rs_corrected) do
+        {[message | messages], errors}
+      else
+        {:error, %ParseError{} = error} ->
+          {messages, [error | errors]}
 
-    %{messages: messages, errors: errors}
+        {:error, reason} ->
+          {messages, [build_error(cobs_encoded, reason) | errors]}
+
+        error ->
+          {messages, [build_error(cobs_encoded, error) | errors]}
+      end
+    end)
+    |> then(fn {messages, errors} ->
+      %{messages: Enum.reverse(messages), errors: Enum.reverse(errors)}
+    end)
   end
 
-  defp decode_line(data, messages \\ [], errors \\ [], buffer \\ <<>>)
+  defp cobs_decode(data) do
+    case Cobs.decode(data) do
+      {:ok, cobs_decoded} ->
+        {:ok, cobs_decoded}
 
-  defp decode_line(<<>>, messages, errors, <<>>) do
-    {Enum.reverse(messages), Enum.reverse(errors)}
+      {:error, reason} ->
+        {:error, build_error(data, {:cobs, reason})}
+    end
   end
 
-  defp decode_line(<<>>, messages, errors, buffer) do
-    error = build_error(buffer)
+  defp rs_correct(data) do
+    case ReedSolomonEx.correct(data, 4) do
+      {:ok, rs_corrected} ->
+        {:ok, rs_corrected}
 
-    {Enum.reverse(messages), Enum.reverse([error | errors])}
+      {:error, reason} ->
+        {:error, build_error(data, {:reed_solomon, reason})}
+    end
+  rescue
+    error ->
+      {:error, build_error(data, {:reed_solomon, error})}
   end
 
   defp decode_line(
          <<type::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
-           packaged_body::binary>> = data,
-         messages,
-         errors,
-         buffer
+           packaged_body::binary>> = data
        )
        when type in [1, 2, 3, 4] do
-    with {:ok, body, rest} <- Msgpax.unpack_slice(packaged_body),
-         {:ok, message} <- to_message_type(type).parse(body) do
-      message =
-        struct(message,
-          checksum: checksum,
-          valid: :erlang.adler32(to_message_type(type).pack(message)) == checksum
-        )
+    case to_message_type(type).parse(packaged_body) do
+      {:ok, message} ->
+        {:ok,
+         struct(message,
+           checksum: checksum,
+           valid: :erlang.adler32(to_message_type(type).pack(message)) == checksum
+         )}
 
-      decode_line(rest, [message | messages], errors, buffer)
-    else
       {:error, reason} ->
         error = build_error(type, packaged_body, reason, data)
-        <<skip::binary-size(1)-unit(8), rest::binary>> = data
-
-        decode_line(
-          rest,
-          messages,
-          [error | errors],
-          <<buffer::binary, skip::binary-size(1)-unit(8)>>
-        )
+        {:error, error}
     end
   end
 
   defp decode_line(
          <<5::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
            transaction_id::unsigned-integer-size(4)-unit(8),
-           total_chunks::unsigned-integer-size(1)-unit(8), rest::binary>>,
-         messages,
-         errors,
-         buffer
+           total_chunks::unsigned-integer-size(1)-unit(8)>>
        ) do
     valid =
       :erlang.adler32(
@@ -159,7 +182,7 @@ defmodule PPNet do
       valid: valid
     }
 
-    decode_line(rest, [message | messages], errors, buffer)
+    {:ok, message}
   end
 
   defp decode_line(
@@ -167,10 +190,7 @@ defmodule PPNet do
            transaction_id::unsigned-integer-size(4)-unit(8),
            chunk_index::unsigned-integer-size(1)-unit(8),
            chunk_size::unsigned-integer-size(2)-unit(8),
-           chunk_data::binary-size(chunk_size)-unit(8), rest::binary>>,
-         messages,
-         errors,
-         buffer
+           chunk_data::binary-size(chunk_size)-unit(8)>>
        ) do
     valid =
       :erlang.adler32(
@@ -189,17 +209,10 @@ defmodule PPNet do
       valid: valid
     }
 
-    decode_line(rest, [message | messages], errors, buffer)
+    {:ok, message}
   end
 
-  # If the line starts with a newline, we skip it and continue decoding the rest of the binary.
-  defp decode_line(<<"\n", rest::binary>>, messages, errors, buffer) do
-    decode_line(rest, messages, errors, buffer)
-  end
-
-  defp decode_line(<<byte_to_skip::size(1)-unit(8), rest::binary>>, messages, errors, buffer) do
-    decode_line(rest, messages, errors, <<buffer::binary, byte_to_skip::size(1)-unit(8)>>)
-  end
+  defp decode_line(data), do: {:error, build_error(data)}
 
   defp build_error(type, body, reason, payload) do
     %ParseError{
@@ -209,12 +222,16 @@ defmodule PPNet do
     }
   end
 
-  defp build_error(payload) do
+  defp build_error(payload, reason) do
     %ParseError{
-      message: "Failed to parse message for unknown type",
-      reason: :unknown_type,
+      message: "Failed to parse message",
+      reason: reason,
       data: %{payload: payload}
     }
+  end
+
+  defp build_error(payload) do
+    build_error(payload, :unknown_type)
   end
 
   defp to_message_type(1), do: Hello
