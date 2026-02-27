@@ -17,7 +17,7 @@ defmodule PPNet.Message.Ping do
     """
     field(:temperature, float(), enforce: true)
     field(:uptime_ms, integer(), enforce: true)
-    field(:extra, map(), default: %{})
+    field(:extra, %{optional(String.t()) => any()}, default: %{})
     field(:checksum, integer())
     field(:valid, boolean())
   end
