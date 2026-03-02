@@ -3,23 +3,31 @@ defmodule PPNet do
   This module defines the `PPNet` module, which provides functions to parse
   a binary or list representation of a message into a struct.
   """
+  alias PPNet.Message.ChunckedMessageBody
+  alias PPNet.Message.ChunckedMessageHeader
+  alias PPNet.Message.Event
   alias PPNet.Message.Hello
-  alias PPNet.Message.ImageBody
+  alias PPNet.Message.Image
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
-  alias PPNet.Message.ImageHeader
-  alias PPNet.Message.Event
   alias PPNet.ParseError
 
   # Reed-Solomon is limited to 255 bytes inclusive
   # Cops is limited to 255 bytes exclusive
   @limit 254
+  @hello_type_code 1
+  @single_counter_type_code 2
+  @ping_type_code 3
+  @event_type_code 4
+  @image_type_code 5
+  @chuncked_message_header_type_code 6
+  @chuncked_message_body_type_code 7
 
   def run do
     image = File.read!("test/support/static/image.webp")
 
     limit = 200
-    messages = encode_image(image, limit)
+    messages = encode_chunked_message(image, Image, limit: limit)
 
     IO.puts("Binary size: #{byte_size(image)}")
     IO.puts("Total messages: #{length(messages)} + 1 header message")
@@ -29,67 +37,70 @@ defmodule PPNet do
     IO.puts("Total overhead: #{100 * 13 / limit}%")
   end
 
-  def encode_message(%module{} = message, limit \\ @limit) when limit <= @limit do
+  def encode_message(%module{} = message, opts \\ []) do
+    limit = get_limit(opts)
+
     packaged_data = module.pack(message)
 
     # type (1 byte) + checksum (4 bytes) + packaged_data + separator (1 byte)
     total_size = 1 + 4 + 1 + 4 + byte_size(packaged_data)
     cops_overhead = ceil(total_size / 254)
-    valid_total_size(limit, total_size + cops_overhead)
 
-    checksum = :erlang.adler32(packaged_data)
+    if total_size + cops_overhead <= limit do
+      checksum = :erlang.adler32(packaged_data)
 
-    message = <<
-      module.type_code()::unsigned-integer-size(1)-unit(8),
-      checksum::32-big-unsigned-integer,
-      packaged_data::binary-size(byte_size(packaged_data))-unit(8)
-    >>
+      message = <<
+        module.type_code()::unsigned-integer-size(1)-unit(8),
+        checksum::32-big-unsigned-integer,
+        packaged_data::binary-size(byte_size(packaged_data))-unit(8)
+      >>
 
-    {:ok, rs_encoded} = ReedSolomonEx.encode(message, 4)
+      {:ok, rs_encoded} = ReedSolomonEx.encode(message, 4)
 
-    rs_encoded
-    |> Cobs.encode!()
-    |> Kernel.<>(<<0>>)
+      rs_encoded
+      |> Cobs.encode!()
+      |> Kernel.<>(<<0>>)
+    else
+      encode_chunked_message(packaged_data, module, opts)
+    end
   end
 
-  def encode_image(binary, chunk_size \\ @limit) do
+  defp encode_chunked_message(binary, module, opts) do
+    limit = get_limit(opts)
     # type (1 byte) + checksum (4 bytes) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (2 bytes)
     # + ReedSolomon overhead (4 bytes) + separator (1 byte)
     chunk_header_size = 17
+    cops_overhead = ceil(255 / 254)
+    chunk_size = limit - chunk_header_size - cops_overhead
     transaction_id = transaction_id()
-
-    cops_overhead = ceil(chunk_size / 254)
+    datetime = DateTime.utc_now()
 
     chunks =
       binary
       |> :binary.bin_to_list()
-      |> Enum.chunk_every(chunk_size - chunk_header_size - cops_overhead)
+      |> Enum.chunk_every(chunk_size)
       |> Enum.map(&IO.iodata_to_binary/1)
 
     total_chunks = length(chunks)
 
-    header =
-      encode_message(
-        %ImageHeader{
-          transaction_id: transaction_id,
-          total_chunks: total_chunks
-        },
-        chunk_size
-      )
+    header = %ChunckedMessageHeader{
+      message_module: module,
+      transaction_id: transaction_id,
+      datetime: datetime,
+      total_chunks: total_chunks
+    }
 
     messages =
       for {chunk, index} <- Enum.with_index(chunks) do
-        encode_message(
-          %ImageBody{
-            transaction_id: transaction_id,
-            chunk_index: index,
-            chunk_data: chunk
-          },
-          chunk_size
-        )
+        %ChunckedMessageBody{
+          transaction_id: transaction_id,
+          chunk_index: index,
+          chunk_size: byte_size(chunk),
+          chunk_data: chunk
+        }
       end
 
-    [header | messages]
+    Enum.map([header | messages], &encode_message(&1, opts))
   end
 
   @doc """
@@ -146,37 +157,42 @@ defmodule PPNet do
   end
 
   defp decode_line(
-         <<type::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
+         <<type_code::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
            packaged_body::binary>> = data
        )
-       when type in [1, 2, 3, 4] do
-    case to_message_type(type).parse(packaged_body) do
+       when type_code in [@hello_type_code, @single_counter_type_code, @ping_type_code, @event_type_code] do
+    case to_message_type(type_code).parse(packaged_body) do
       {:ok, message} ->
         {:ok,
          struct(message,
            checksum: checksum,
-           valid: :erlang.adler32(to_message_type(type).pack(message)) == checksum
+           valid: :erlang.adler32(to_message_type(type_code).pack(message)) == checksum
          )}
 
       {:error, reason} ->
-        error = build_error(type, packaged_body, reason, data)
+        error = build_error(type_code, packaged_body, reason, data)
         {:error, error}
     end
   end
 
   defp decode_line(
-         <<5::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
-           transaction_id::unsigned-integer-size(4)-unit(8),
+         <<@chuncked_message_header_type_code::unsigned-integer-size(1)-unit(8),
+           checksum::unsigned-integer-size(4)-unit(8), message_module_code::unsigned-integer-size(1)-unit(8),
+           transaction_id::unsigned-integer-size(4)-unit(8), datetime_unix::unsigned-integer-size(4)-unit(8),
            total_chunks::unsigned-integer-size(1)-unit(8)>>
        ) do
     valid =
       :erlang.adler32(
-        <<transaction_id::unsigned-integer-size(4)-unit(8),
-          total_chunks::unsigned-integer-size(1)-unit(8)>>
+        <<message_module_code::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
+          datetime_unix::unsigned-integer-size(4)-unit(8), total_chunks::unsigned-integer-size(1)-unit(8)>>
       ) == checksum
 
-    message = %ImageHeader{
+    {:ok, datetime} = DateTime.from_unix(datetime_unix)
+
+    message = %ChunckedMessageHeader{
+      message_module: to_message_type(message_module_code),
       transaction_id: transaction_id,
+      datetime: datetime,
       total_chunks: total_chunks,
       checksum: checksum,
       valid: valid
@@ -186,25 +202,22 @@ defmodule PPNet do
   end
 
   defp decode_line(
-         <<6::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
-           transaction_id::unsigned-integer-size(4)-unit(8),
-           chunk_index::unsigned-integer-size(1)-unit(8),
-           chunk_size::unsigned-integer-size(2)-unit(8),
+         <<@chuncked_message_body_type_code::unsigned-integer-size(1)-unit(8),
+           checksum::unsigned-integer-size(4)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
+           chunk_index::unsigned-integer-size(1)-unit(8), chunk_size::unsigned-integer-size(2)-unit(8),
            chunk_data::binary-size(chunk_size)-unit(8)>>
        ) do
     valid =
       :erlang.adler32(
-        <<transaction_id::unsigned-integer-size(4)-unit(8),
-          chunk_index::unsigned-integer-size(1)-unit(8),
-          chunk_size::unsigned-integer-size(2)-unit(8),
-          chunk_data::binary-size(chunk_size)-unit(8)>>
+        <<transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(1)-unit(8),
+          chunk_size::unsigned-integer-size(2)-unit(8), chunk_data::binary-size(chunk_size)-unit(8)>>
       ) == checksum
 
-    message = %ImageBody{
+    message = %ChunckedMessageBody{
       transaction_id: transaction_id,
       chunk_index: chunk_index,
-      chunk_data: chunk_data,
       chunk_size: chunk_size,
+      chunk_data: chunk_data,
       checksum: checksum,
       valid: valid
     }
@@ -234,18 +247,20 @@ defmodule PPNet do
     build_error(payload, :unknown_type)
   end
 
-  defp to_message_type(1), do: Hello
-  defp to_message_type(2), do: SingleCounter
-  defp to_message_type(3), do: Ping
-  defp to_message_type(4), do: Event
-
-  defp valid_total_size(limit, total_size) when is_integer(limit) and total_size > limit,
-    do: raise("Total size must be less than or equal #{limit}")
-
-  defp valid_total_size(_, _), do: :ok
+  defp to_message_type(@hello_type_code), do: Hello
+  defp to_message_type(@single_counter_type_code), do: SingleCounter
+  defp to_message_type(@ping_type_code), do: Ping
+  defp to_message_type(@event_type_code), do: Event
+  defp to_message_type(@image_type_code), do: Image
+  defp to_message_type(@chuncked_message_header_type_code), do: ChunckedMessageHeader
+  defp to_message_type(@chuncked_message_body_type_code), do: ChunckedMessageBody
 
   defp transaction_id do
     <<int::unsigned-integer-size(4)-unit(8)>> = :crypto.strong_rand_bytes(4)
     int
+  end
+
+  defp get_limit(opts) do
+    if is_integer(opts[:limit]) and opts[:limit] <= @limit, do: opts[:limit], else: @limit
   end
 end

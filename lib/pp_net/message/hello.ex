@@ -3,6 +3,8 @@ defmodule PPNet.Message.Hello do
   This module defines the `PPNet.Message.Hello` struct and provides functions to parse
   a binary or list representation of a Hello message into this struct.
   """
+  @behaviour PPNet.Message
+
   use TypedStruct
 
   alias PPNet.Message.Hello
@@ -37,8 +39,10 @@ defmodule PPNet.Message.Hello do
     field(:valid, boolean())
   end
 
+  @impl true
   def type_code, do: @type_code
 
+  @impl true
   def pack(%__MODULE__{} = message) do
     Msgpax.pack!(
       [
@@ -53,6 +57,7 @@ defmodule PPNet.Message.Hello do
     )
   end
 
+  @impl true
   def parse(packaged_body) when is_binary(packaged_body) do
     with {:ok, unpacked_body} <- Msgpax.unpack(packaged_body) do
       parse(unpacked_body)
@@ -61,8 +66,7 @@ defmodule PPNet.Message.Hello do
 
   # credo:disable-for-lines:2
   def parse([unique_id, board_identifier, version, board_version, boot_id, ppnet_version])
-      when is_binary(unique_id) and is_binary(board_identifier) and is_integer(version) and
-             is_integer(board_version) and
+      when is_binary(unique_id) and is_binary(board_identifier) and is_integer(version) and is_integer(board_version) and
              is_integer(boot_id) and is_integer(ppnet_version) do
     {:ok,
      %Hello{
