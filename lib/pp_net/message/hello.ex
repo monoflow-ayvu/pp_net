@@ -25,8 +25,6 @@ defmodule PPNet.Message.Hello do
     * `board_version` - The version of the board
     * `boot_id` - The boot ID of the board
     * `ppnet_version` - The version of the PPNet library
-    * `checksum` - The checksum of the message
-    * `valid` - Whether the message is valid
     """
 
     field(:unique_id, String.t(), enforce: true)
@@ -35,8 +33,6 @@ defmodule PPNet.Message.Hello do
     field(:board_version, non_neg_integer(), enforce: true)
     field(:boot_id, non_neg_integer(), enforce: true)
     field(:ppnet_version, non_neg_integer(), default: 1)
-    field(:checksum, non_neg_integer())
-    field(:valid, boolean())
   end
 
   @impl true

@@ -15,6 +15,8 @@ defmodule PPNet do
   # Reed-Solomon is limited to 255 bytes inclusive
   # Cops is limited to 255 bytes exclusive
   @limit 254
+  # Minimun chunk size is 17 bytes because this is the size of ChunckedMessageHeader
+  @min_chunk_size 17
   @hello_type_code 1
   @single_counter_type_code 2
   @ping_type_code 3
@@ -42,16 +44,13 @@ defmodule PPNet do
 
     packaged_data = module.pack(message)
 
-    # type (1 byte) + checksum (4 bytes) + packaged_data + separator (1 byte)
-    total_size = 1 + 4 + 1 + 4 + byte_size(packaged_data)
+    # type (1 byte) + packaged_data + Reed-Solomon overhead (4 bytes) + separator (1 byte)
+    total_size = 1 + byte_size(packaged_data) + 4 + 1
     cops_overhead = ceil(total_size / 254)
 
     if total_size + cops_overhead <= limit do
-      checksum = :erlang.adler32(packaged_data)
-
       message = <<
         module.type_code()::unsigned-integer-size(1)-unit(8),
-        checksum::32-big-unsigned-integer,
         packaged_data::binary-size(byte_size(packaged_data))-unit(8)
       >>
 
@@ -67,9 +66,9 @@ defmodule PPNet do
 
   defp encode_chunked_message(binary, module, opts) do
     limit = get_limit(opts)
-    # type (1 byte) + checksum (4 bytes) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (2 bytes)
+    # type (1 byte) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (1 byte)
     # + ReedSolomon overhead (4 bytes) + separator (1 byte)
-    chunk_header_size = 17
+    chunk_header_size = 13
     cops_overhead = ceil(255 / 254)
     chunk_size = limit - chunk_header_size - cops_overhead
     transaction_id = transaction_id()
@@ -143,6 +142,37 @@ defmodule PPNet do
     end
   end
 
+  def chuncked_to_message([
+        %ChunckedMessageHeader{
+          message_module: message_module,
+          transaction_id: transaction_id,
+          total_chunks: total_chunks
+        } = header
+        | chunks
+      ])
+      when total_chunks == length(chunks) do
+    if Enum.all?(chunks, fn %ChunckedMessageBody{transaction_id: ^transaction_id} -> true end) do
+      binary =
+        chunks
+        |> Enum.sort_by(& &1.chunk_index)
+        |> Enum.map_join("", & &1.chunk_data)
+
+      case message_module.parse(binary) do
+        {:ok, message} ->
+          {:ok, message}
+
+        {:error, reason} ->
+          {:error, build_error(header, reason)}
+      end
+    else
+      {:error, build_error(header, :invalid_transaction_id)}
+    end
+  end
+
+  def chuncked_to_message([%ChunckedMessageHeader{} | _chunks] = chuncked_message) do
+    {:error, build_error(chuncked_message, :missing_chunks)}
+  end
+
   defp rs_correct(data) do
     case ReedSolomonEx.correct(data, 4) do
       {:ok, rs_corrected} ->
@@ -156,18 +186,11 @@ defmodule PPNet do
       {:error, build_error(data, {:reed_solomon, error})}
   end
 
-  defp decode_line(
-         <<type_code::unsigned-integer-size(1)-unit(8), checksum::unsigned-integer-size(4)-unit(8),
-           packaged_body::binary>> = data
-       )
+  defp decode_line(<<type_code::unsigned-integer-size(1)-unit(8), packaged_body::binary>> = data)
        when type_code in [@hello_type_code, @single_counter_type_code, @ping_type_code, @event_type_code] do
     case to_message_type(type_code).parse(packaged_body) do
       {:ok, message} ->
-        {:ok,
-         struct(message,
-           checksum: checksum,
-           valid: :erlang.adler32(to_message_type(type_code).pack(message)) == checksum
-         )}
+        {:ok, message}
 
       {:error, reason} ->
         error = build_error(type_code, packaged_body, reason, data)
@@ -177,25 +200,16 @@ defmodule PPNet do
 
   defp decode_line(
          <<@chuncked_message_header_type_code::unsigned-integer-size(1)-unit(8),
-           checksum::unsigned-integer-size(4)-unit(8), message_module_code::unsigned-integer-size(1)-unit(8),
-           transaction_id::unsigned-integer-size(4)-unit(8), datetime_unix::unsigned-integer-size(4)-unit(8),
-           total_chunks::unsigned-integer-size(1)-unit(8)>>
+           message_module_code::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
+           datetime_unix::unsigned-integer-size(4)-unit(8), total_chunks::unsigned-integer-size(1)-unit(8)>>
        ) do
-    valid =
-      :erlang.adler32(
-        <<message_module_code::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
-          datetime_unix::unsigned-integer-size(4)-unit(8), total_chunks::unsigned-integer-size(1)-unit(8)>>
-      ) == checksum
-
     {:ok, datetime} = DateTime.from_unix(datetime_unix)
 
     message = %ChunckedMessageHeader{
       message_module: to_message_type(message_module_code),
       transaction_id: transaction_id,
       datetime: datetime,
-      total_chunks: total_chunks,
-      checksum: checksum,
-      valid: valid
+      total_chunks: total_chunks
     }
 
     {:ok, message}
@@ -203,23 +217,14 @@ defmodule PPNet do
 
   defp decode_line(
          <<@chuncked_message_body_type_code::unsigned-integer-size(1)-unit(8),
-           checksum::unsigned-integer-size(4)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
-           chunk_index::unsigned-integer-size(1)-unit(8), chunk_size::unsigned-integer-size(2)-unit(8),
-           chunk_data::binary-size(chunk_size)-unit(8)>>
+           transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(1)-unit(8),
+           chunk_size::unsigned-integer-size(1)-unit(8), chunk_data::binary-size(chunk_size)-unit(8)>>
        ) do
-    valid =
-      :erlang.adler32(
-        <<transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(1)-unit(8),
-          chunk_size::unsigned-integer-size(2)-unit(8), chunk_data::binary-size(chunk_size)-unit(8)>>
-      ) == checksum
-
     message = %ChunckedMessageBody{
       transaction_id: transaction_id,
       chunk_index: chunk_index,
       chunk_size: chunk_size,
-      chunk_data: chunk_data,
-      checksum: checksum,
-      valid: valid
+      chunk_data: chunk_data
     }
 
     {:ok, message}
@@ -261,6 +266,13 @@ defmodule PPNet do
   end
 
   defp get_limit(opts) do
-    if is_integer(opts[:limit]) and opts[:limit] <= @limit, do: opts[:limit], else: @limit
+    limit = opts[:limit]
+
+    cond do
+      is_integer(limit) and limit > @limit -> @limit
+      is_integer(limit) and limit < @min_chunk_size -> @min_chunk_size
+      is_integer(limit) and limit <= @limit -> limit
+      true -> @limit
+    end
   end
 end

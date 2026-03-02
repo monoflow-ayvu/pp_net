@@ -12,15 +12,13 @@ defmodule PPNetTest do
   describe "decode PPNet.Message.Hello" do
     test "parse/1 with valid binary data" do
       payload =
-        <<0x29, 0x01, 0xDA, 0x12, 0x0C, 0x4F, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72,
-          0xA6, 0x54, 0x65, 0x73, 0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56,
-          0x01, 0xAF, 0xD2, 0x18, 0x8B, 0x00>>
+        <<0x25, 0x01, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
+          0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0x8C, 0xB3, 0xA0,
+          0xFA, 0x00>>
 
       assert %{
                messages: [
                  %Hello{
-                   valid: true,
-                   checksum: 3_658_615_887,
                    ppnet_version: 1,
                    boot_id: 87_372_886,
                    board_version: 17_185,
@@ -36,16 +34,14 @@ defmodule PPNetTest do
     test "parse/1 with valid binary data when payload is a" do
       payload =
         :binary.bin_to_list(
-          <<0x29, 0x01, 0xDA, 0x12, 0x0C, 0x4F, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72,
-            0xA6, 0x54, 0x65, 0x73, 0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56,
-            0x01, 0xAF, 0xD2, 0x18, 0x8B, 0x00>>
+          <<0x25, 0x01, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
+            0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0x8C, 0xB3, 0xA0,
+            0xFA, 0x00>>
         )
 
       assert %{
                messages: [
                  %Hello{
-                   valid: true,
-                   checksum: 3_658_615_887,
                    ppnet_version: 1,
                    boot_id: 87_372_886,
                    board_version: 17_185,
@@ -99,23 +95,44 @@ defmodule PPNetTest do
       }
 
       assert PPNet.encode_message(message) ==
-               <<0x29, 0x01, 0xDA, 0x12, 0x0C, 0x4F, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65,
-                 0x72, 0xA6, 0x54, 0x65, 0x73, 0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35,
-                 0x34, 0x56, 0x01, 0xAF, 0xD2, 0x18, 0x8B, 0x00>>
+               <<0x25, 0x01, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65,
+                 0x73, 0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0x8C,
+                 0xB3, 0xA0, 0xFA, 0x00>>
+    end
+
+    test "message too large is split into chunks" do
+      hello = %Hello{
+        board_identifier: "Tester",
+        board_version: 17_185,
+        boot_id: 87_372_886,
+        ppnet_version: 1,
+        unique_id: "TestRunner",
+        version: 4660
+      }
+
+      [encoded_header | encoded_chunks] = PPNet.encode_message(hello, limit: 35)
+
+      assert %{messages: [decoded_header | decoded_chunks], errors: []} =
+               [encoded_header | encoded_chunks] |> Enum.join() |> PPNet.parse()
+
+      assert decoded_header.message_module == Hello
+      assert decoded_header.total_chunks == length(decoded_chunks)
+
+      assert Enum.all?(decoded_chunks, fn decoded_chunk ->
+               decoded_chunk.transaction_id == decoded_header.transaction_id
+             end)
+
+      assert PPNet.chuncked_to_message([decoded_header | decoded_chunks]) == {:ok, hello}
     end
   end
 
   describe "decode PPNet.Message.SingleCounter" do
     test "parse/1 with valid binary data" do
-      payload =
-        <<0x0C, 0x02, 0x18, 0x0F, 0x04, 0x45, 0x94, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x08, 0xCD, 0x05, 0xDC, 0x50, 0xBD,
-          0x1C, 0xDD, 0x00>>
+      payload = <<0x08, 0x02, 0x94, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x08, 0xCD, 0x05, 0xDC, 0xE6, 0xAD, 0xEB, 0xDA, 0x00>>
 
       assert %{
                messages: [
                  %SingleCounter{
-                   valid: true,
-                   checksum: 403_637_317,
                    duration_ms: 1500,
                    pulses: 0,
                    value: 42,
@@ -130,16 +147,13 @@ defmodule PPNetTest do
     test "parse/1 with valid binary data when payload is a list" do
       payload =
         :binary.bin_to_list(
-          <<0x0C, 0x02, 0x18, 0x0F, 0x04, 0x45, 0x94, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x08, 0xCD, 0x05, 0xDC, 0x50, 0xBD,
-            0x1C, 0xDD, 0x00>>
+          <<0x08, 0x02, 0x94, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x08, 0xCD, 0x05, 0xDC, 0xE6, 0xAD, 0xEB, 0xDA, 0x00>>
         )
 
       assert PPNet.parse(payload) ==
                %{
                  messages: [
                    %SingleCounter{
-                     valid: true,
-                     checksum: 403_637_317,
                      duration_ms: 1500,
                      pulses: 0,
                      value: 42,
@@ -190,25 +204,22 @@ defmodule PPNetTest do
       }
 
       assert PPNet.encode_message(message) ==
-               <<0x0C, 0x02, 0x18, 0x0F, 0x04, 0x45, 0x94, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x08, 0xCD, 0x05, 0xDC, 0x50,
-                 0xBD, 0x1C, 0xDD, 0x00>>
+               <<0x08, 0x02, 0x94, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x08, 0xCD, 0x05, 0xDC, 0xE6, 0xAD, 0xEB, 0xDA, 0x00>>
     end
   end
 
   describe "decode PPNet.Message.Ping" do
     test "parse/1 with valid binary data" do
       payload =
-        <<0x0A, 0x03, 0x1D, 0x67, 0x04, 0x10, 0x93, 0xCB, 0x40, 0x39, 0x01, 0x01, 0x01, 0x01, 0x01, 0x09, 0xCD, 0x03,
-          0xE8, 0x80, 0x4B, 0x6A, 0x59, 0x92, 0x00>>
+        <<0x06, 0x03, 0x93, 0xCB, 0x40, 0x39, 0x01, 0x01, 0x01, 0x01, 0x01, 0x09, 0xCD, 0x03, 0xE8, 0x80, 0x63, 0x8C,
+          0xDF, 0xB4, 0x00>>
 
       assert %{
                messages: [
                  %Ping{
                    temperature: 25.0,
                    uptime_ms: 1000,
-                   extra: %{},
-                   checksum: 493_290_512,
-                   valid: true
+                   extra: %{}
                  }
                ],
                errors: []
@@ -217,15 +228,13 @@ defmodule PPNetTest do
 
     test "parse/1 with valid binary data and extra is present" do
       payload =
-        <<0x0A, 0x03, 0x9F, 0xAA, 0x0B, 0x91, 0x93, 0xCB, 0x40, 0x39, 0x01, 0x01, 0x01, 0x01, 0x01, 0x19, 0xCD, 0x03,
-          0xE8, 0x82, 0xA3, 0x66, 0x6F, 0x6F, 0xA3, 0x62, 0x61, 0x7A, 0xA3, 0x62, 0x61, 0x7A, 0xA3, 0x62, 0x61, 0x72,
-          0x99, 0xB2, 0xCB, 0xDE, 0x00>>
+        <<0x06, 0x03, 0x93, 0xCB, 0x40, 0x39, 0x01, 0x01, 0x01, 0x01, 0x01, 0x19, 0xCD, 0x03, 0xE8, 0x82, 0xA3, 0x66,
+          0x6F, 0x6F, 0xA3, 0x62, 0x61, 0x7A, 0xA3, 0x62, 0x61, 0x7A, 0xA3, 0x62, 0x61, 0x72, 0x6B, 0x18, 0x4F, 0xAD,
+          0x00>>
 
       assert %{
                messages: [
                  %Ping{
-                   valid: true,
-                   checksum: 2_678_721_425,
                    extra: %{"baz" => "bar", "foo" => "baz"},
                    uptime_ms: 1000,
                    temperature: 25.0
@@ -244,8 +253,8 @@ defmodule PPNetTest do
       }
 
       assert PPNet.encode_message(message) ==
-               <<0x0A, 0x03, 0x1D, 0x67, 0x04, 0x10, 0x93, 0xCB, 0x40, 0x39, 0x01, 0x01, 0x01, 0x01, 0x01, 0x09, 0xCD,
-                 0x03, 0xE8, 0x80, 0x4B, 0x6A, 0x59, 0x92, 0x00>>
+               <<0x06, 0x03, 0x93, 0xCB, 0x40, 0x39, 0x01, 0x01, 0x01, 0x01, 0x01, 0x09, 0xCD, 0x03, 0xE8, 0x80, 0x63,
+                 0x8C, 0xDF, 0xB4, 0x00>>
     end
 
     test "encode/1 with valid data and extra" do
@@ -256,26 +265,45 @@ defmodule PPNetTest do
       }
 
       assert PPNet.encode_message(message) ==
-               <<0x0A, 0x03, 0x7E, 0x01, 0x0A, 0x2C, 0x93, 0xCB, 0x40, 0x39, 0x01, 0x01, 0x01, 0x01, 0x01, 0x16, 0xCD,
-                 0x03, 0xE8, 0x82, 0xA3, 0x62, 0x61, 0x7A, 0x7B, 0xA3, 0x66, 0x6F, 0x6F, 0xA3, 0x62, 0x61, 0x72, 0xD5,
-                 0x6D, 0xAE, 0x7F, 0x00>>
+               <<0x06, 0x03, 0x93, 0xCB, 0x40, 0x39, 0x01, 0x01, 0x01, 0x01, 0x01, 0x16, 0xCD, 0x03, 0xE8, 0x82, 0xA3,
+                 0x62, 0x61, 0x7A, 0x7B, 0xA3, 0x66, 0x6F, 0x6F, 0xA3, 0x62, 0x61, 0x72, 0x68, 0x70, 0xAE, 0x86, 0x00>>
+    end
+
+    test "message too large is split into chunks" do
+      message = %Ping{
+        temperature: 25.0,
+        uptime_ms: 1000,
+        extra: %{"foo" => String.duplicate("a", 100)}
+      }
+
+      [encoded_header | encoded_chunks] = PPNet.encode_message(message, limit: 25)
+
+      assert %{messages: [decoded_header | decoded_chunks], errors: []} =
+               [encoded_header | encoded_chunks] |> Enum.join() |> PPNet.parse()
+
+      assert decoded_header.message_module == Ping
+      assert decoded_header.total_chunks == length(decoded_chunks)
+
+      assert Enum.all?(decoded_chunks, fn decoded_chunk ->
+               decoded_chunk.transaction_id == decoded_header.transaction_id
+             end)
+
+      assert PPNet.chuncked_to_message([decoded_header | decoded_chunks]) == {:ok, message}
     end
   end
 
   describe "decode PPNet.Message.Event" do
     test "parse/1 with valid binary data" do
       payload =
-        <<0x2B, 0x04, 0x01, 0xAB, 0x0E, 0x68, 0x92, 0xAC, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F, 0x61, 0x6C, 0x65,
-          0x72, 0x74, 0x82, 0xA5, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x64, 0xA9, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F,
-          0x69, 0x64, 0x01, 0x91, 0xAC, 0xD7, 0xFF, 0x00>>
+        <<0x27, 0x04, 0x92, 0xAC, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F, 0x61, 0x6C, 0x65, 0x72, 0x74, 0x82, 0xA5,
+          0x76, 0x61, 0x6C, 0x75, 0x65, 0x64, 0xA9, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F, 0x69, 0x64, 0x01, 0x62,
+          0x36, 0xB3, 0x3E, 0x00>>
 
       assert %{
                messages: [
                  %Event{
-                   checksum: 27_987_560,
                    data: %{"sensor_id" => 1, "value" => 100},
-                   kind: "sensor_alert",
-                   valid: true
+                   kind: "sensor_alert"
                  }
                ],
                errors: []
@@ -289,16 +317,37 @@ defmodule PPNetTest do
                kind: "sensor_alert",
                data: %{sensor_id: 1, value: 100}
              }) ==
-               <<0x2B, 0x04, 0xFE, 0x0A, 0x0E, 0x68, 0x92, 0xAC, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F, 0x61, 0x6C,
-                 0x65, 0x72, 0x74, 0x82, 0xA9, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F, 0x69, 0x64, 0x01, 0xA5, 0x76,
-                 0x61, 0x6C, 0x75, 0x65, 0x64, 0xB1, 0x9C, 0x3A, 0x5C, 0x00>>
+               <<0x27, 0x04, 0x92, 0xAC, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F, 0x61, 0x6C, 0x65, 0x72, 0x74, 0x82,
+                 0xA9, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F, 0x69, 0x64, 0x01, 0xA5, 0x76, 0x61, 0x6C, 0x75, 0x65,
+                 0x64, 0x61, 0xBA, 0x3D, 0x3F, 0x00>>
+    end
+
+    test "message too large is split into chunks" do
+      message = %Event{
+        kind: "sensor_alert",
+        data: %{"sensor_id" => 1, "value" => String.duplicate("a", 100)}
+      }
+
+      [encoded_header | encoded_chunks] = PPNet.encode_message(message, limit: 35)
+
+      assert %{messages: [decoded_header | decoded_chunks], errors: []} =
+               [encoded_header | encoded_chunks] |> Enum.join() |> PPNet.parse()
+
+      assert decoded_header.message_module == Event
+      assert decoded_header.total_chunks == length(decoded_chunks)
+
+      assert Enum.all?(decoded_chunks, fn decoded_chunk ->
+               decoded_chunk.transaction_id == decoded_header.transaction_id
+             end)
+
+      assert PPNet.chuncked_to_message([decoded_header | decoded_chunks]) == {:ok, message}
     end
   end
 
   describe "encode image" do
     test "encode/1 with valid data limited to 200 bytes" do
       image = File.read!("test/support/static/image.webp")
-      [header | chunks] = PPNet.encode_message(%Image{data: image}, limit: 200)
+      [header | chunks] = PPNet.encode_message(%Image{data: image, format: :webp}, limit: 200)
 
       assert %{
                messages: [
@@ -306,15 +355,12 @@ defmodule PPNetTest do
                    message_module: Image,
                    transaction_id: transaction_id,
                    datetime: %DateTime{},
-                   total_chunks: 150,
-                   valid: true,
-                   checksum: checksum
-                 }
+                   total_chunks: 147
+                 } = decoded_header
                ],
                errors: []
              } = PPNet.parse(header)
 
-      assert is_integer(checksum)
       assert is_integer(transaction_id)
 
       decoded_chunks =
@@ -325,9 +371,7 @@ defmodule PPNetTest do
                        transaction_id: ^transaction_id,
                        chunk_index: chunk_index,
                        chunk_size: chunk_size,
-                       chunk_data: chunk_data,
-                       valid: true,
-                       checksum: _checksum
+                       chunk_data: chunk_data
                      } = decoded_chunk
                    ],
                    errors: []
@@ -342,19 +386,15 @@ defmodule PPNetTest do
           decoded_chunk
         end)
 
-      reconstructed_image =
-        decoded_chunks
-        |> Enum.sort_by(& &1.chunk_index)
-        |> Enum.map_join("", & &1.chunk_data)
-
-      assert image == reconstructed_image
+      assert {:ok, %Image{data: ^image, format: :webp}} =
+               PPNet.chuncked_to_message([decoded_header | decoded_chunks])
     end
 
     test "encode/1 with valid data without limit uses default limit of 254" do
       image = File.read!("test/support/static/image.webp")
 
       messages =
-        %Image{data: image}
+        %Image{data: image, format: :webp}
         |> PPNet.encode_message()
         |> Enum.join()
 
@@ -364,9 +404,7 @@ defmodule PPNetTest do
                  %ChunckedMessageHeader{
                    message_module: Image,
                    transaction_id: transaction_id,
-                   total_chunks: 116,
-                   valid: true,
-                   checksum: _checksum_header
+                   total_chunks: 114
                  } = header
                  | chunks
                ]
@@ -376,8 +414,6 @@ defmodule PPNetTest do
 
       assert Enum.all?(Enum.with_index(chunks), fn {chunk, index} ->
                assert %ChunckedMessageBody{
-                        valid: true,
-                        checksum: _checksum,
                         chunk_data: chunk_data,
                         chunk_size: chunk_size,
                         chunk_index: ^index,
@@ -387,6 +423,9 @@ defmodule PPNetTest do
                assert is_binary(chunk_data)
                assert chunk_size <= 254
              end)
+
+      assert {:ok, %Image{data: ^image, format: :webp}} =
+               PPNet.chuncked_to_message([header | chunks])
     end
   end
 
@@ -399,23 +438,20 @@ defmodule PPNetTest do
                  %ChunckedMessageHeader{
                    message_module: Image,
                    transaction_id: transaction_id,
-                   total_chunks: 150,
-                   valid: true,
-                   checksum: _checksum
+                   total_chunks: 147,
+                   datetime: %DateTime{}
                  }
                  | chunks
                ],
                errors: []
              } =
-               %Image{data: payload}
+               %Image{data: payload, format: :webp}
                |> PPNet.encode_message(limit: 200)
                |> Enum.join()
                |> PPNet.parse()
 
       assert Enum.all?(chunks, fn chunk ->
                %ChunckedMessageBody{
-                 valid: true,
-                 checksum: _checksum,
                  chunk_data: chunk_data,
                  chunk_size: chunk_size,
                  chunk_index: chunk_index,
@@ -496,7 +532,7 @@ defmodule PPNetTest do
         })
 
       image = File.read!("test/support/static/image.webp")
-      [image_header | image_chunks] = PPNet.encode_message(%Image{data: image}, limit: 200)
+      [image_header | image_chunks] = PPNet.encode_message(%Image{data: image, format: :webp}, limit: 200)
 
       wrong_message =
         <<0x04, 0xFE, 0xA, 0xE, 0x68, 0x92, 0xAC, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F, 0x00>>
@@ -521,17 +557,13 @@ defmodule PPNetTest do
                %ChunckedMessageHeader{
                  message_module: Image,
                  transaction_id: transaction_id,
-                 total_chunks: total_chunks,
-                 valid: true,
-                 checksum: _checksum
+                 total_chunks: total_chunks
                }
                | rest_1
              ] = messages
 
       assert [
                %Ping{
-                 valid: true,
-                 checksum: _checksum,
                  temperature: 25.0,
                  uptime_ms: 1000
                }
@@ -542,8 +574,6 @@ defmodule PPNetTest do
 
       assert Enum.all?(Enum.with_index(chunks), fn {chunk, index} ->
                assert %ChunckedMessageBody{
-                        valid: true,
-                        checksum: _checksum,
                         chunk_data: _chunk_data,
                         chunk_size: _chunk_size,
                         chunk_index: ^index,
@@ -553,8 +583,6 @@ defmodule PPNetTest do
 
       assert [
                %SingleCounter{
-                 valid: true,
-                 checksum: _checksum,
                  duration_ms: 1500,
                  pulses: 0,
                  value: 42,
@@ -565,8 +593,6 @@ defmodule PPNetTest do
 
       assert [
                %Hello{
-                 valid: true,
-                 checksum: _checksum,
                  board_identifier: "Tester",
                  board_version: 17_185,
                  boot_id: 87_372_886,
@@ -579,8 +605,6 @@ defmodule PPNetTest do
 
       assert [
                %Event{
-                 valid: true,
-                 checksum: _checksum,
                  kind: "sensor_alert",
                  data: %{"sensor_id" => 1, "value" => 100}
                }

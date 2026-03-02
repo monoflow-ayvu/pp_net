@@ -1,6 +1,6 @@
 # PpNet
 
-Message protocol with error correction (Reed-Solomon), framing (COBS), and checksum (Adler32).
+Message protocol with error correction (Reed-Solomon) and framing (COBS) for the Pagy Plus stack.
 
 ## Installation
 
@@ -19,7 +19,7 @@ end
 Each message is encoded in two stages before being sent on the wire:
 
 1. **Frame**  
-   Build the frame: `type` (1 byte) + `checksum` (4 bytes, Adler32 of body) + `body` (variable).
+   Build the frame: `type` (1 byte) + `body` (variable). There is no separate checksum field; Reed-Solomon provides integrity.
 
 2. **Reed-Solomon**  
    The frame is encoded with **Reed-Solomon** (4 parity bytes), allowing up to 4 corrupted bytes in the block to be corrected. Maximum block size is 255 bytes (typical RS limit in GF(2⁸)).
@@ -30,34 +30,33 @@ Each message is encoded in two stages before being sent on the wire:
 4. **Separator**  
    A single `0x00` byte is appended after each encoded message, marking the end of the frame.
 
-**Decoding:** the receiver splits the stream on `0x00`, decodes each block with COBS, applies Reed-Solomon to correct errors, then parses the frame (type + checksum + body) and validates the checksum.
+**Decoding:** the receiver splits the stream on `0x00`, decodes each block with COBS, applies Reed-Solomon to correct errors, then parses the frame (type + body).
 
-| Step    | Encode                     | Decode     |
-| ------- | -------------------------- | ---------- |
-| Frame   | type + checksum + body     | —          |
-| RS      | + 4 parity bytes           | correction |
-| COBS    | byte stuffing              | unstuff    |
-| Stream  | …payload…`0x00`            | split by `0x00` |
+| Step    | Encode                | Decode     |
+| ------- | --------------------- | ---------- |
+| Frame   | type + body           | —          |
+| RS      | + 4 parity bytes      | correction |
+| COBS    | byte stuffing         | unstuff    |
+| Stream  | …payload…`0x00`       | split by `0x00` |
 
 ## Frame structure (after Reed-Solomon)
 
-All messages share the same frame header:
+All messages share the same logical layout before COBS:
 
-| Field    | Type         | Bytes    |
-| -------- | ------------ | -------- |
-| type     | uint8        | 1        |
-| checksum | uint32 (big) | 4        |
-| body     | binary       | variable |
+| Field | Type     | Bytes    |
+| ----- | -------- | -------- |
+| type  | uint8    | 1        |
+| body  | binary   | variable |
 
-The **checksum** is Adler32 of the **body** only (it does not include the type byte). When parsing, the struct field `valid` indicates whether the checksum matches.
+The full block (type + body) is protected by 4 Reed-Solomon parity bytes.
 
 ---
 
 ## Message formats (body)
 
-### Types 1–4: common frame (MessagePack)
+### Types 1–4: MessagePack body
 
-Hello (1), SingleCounter (2), Ping (3), and Event (4) use **MessagePack** for the body. The frame is: `type` + `checksum` + MessagePack body.
+Hello (1), SingleCounter (2), Ping (3), and Event (4) use **MessagePack** for the body.
 
 ---
 
@@ -91,15 +90,13 @@ Body: MessagePack array.
 
 ### Type 3 — Ping
 
-Body: MessagePack array. Minimum format: `[temperature, uptime_ms]`. May include a third element: map `extra`.
+Body: MessagePack array. Minimum format: `[temperature, uptime_ms]`. Optional third element: map `extra`.
 
 | Field       | Type    |
 | ----------- | ------- |
 | temperature | float   |
 | uptime_ms   | integer |
 | extra       | map (optional) |
-
-Extended format (8 elements): `[temperature, uptime_ms, cpu, tpu, system_load, storage_available_bytes, wifi, extra]` — CPU, TPU, system load, free storage, and WiFi (MAC address and signal level).
 
 ---
 
@@ -116,13 +113,20 @@ Body: MessagePack array `[kind, data]`.
 
 ### Type 5 — Image
 
-Body: raw binary (image data). Used when the image fits in a single frame (within the channel limit). Otherwise, fragmented messages (types 6 and 7) are used.
+Body: fixed header + raw image data.
+
+| Field  | Type   | Bytes      |
+| ------ | ------ | ---------- |
+| format | uint8  | 1 (1=jpeg, 2=webp, 3=png) |
+| data   | binary | variable   |
+
+When the encoded image (or any message) exceeds the channel limit, it is sent as chunked messages (types 6 and 7).
 
 ---
 
-### Type 6 — ChunckedMessageHeader (fragmented message header)
+### Type 6 — ChunckedMessageHeader (chunked message header)
 
-Used when the payload is large (e.g. image). The body is fixed binary (no MessagePack).
+Used when the payload is too large for a single frame (e.g. image). The body is fixed binary.
 
 | Field               | Type   | Bytes |
 | ------------------- | ------ | ----- |
@@ -131,19 +135,37 @@ Used when the payload is large (e.g. image). The body is fixed binary (no Messag
 | datetime            | uint32 (Unix) | 4 |
 | total_chunks        | uint8  | 1     |
 
-`message_module_code` indicates the original message type (1=Hello, 2=SingleCounter, 3=Ping, 4=Event, 5=Image). The frame checksum covers this entire body (10 bytes).
+`message_module_code` indicates the original message type (1=Hello, 2=SingleCounter, 3=Ping, 4=Event, 5=Image). Total header body: 10 bytes.
 
 ---
 
 ### Type 7 — ChunckedMessageBody (fragment)
 
-Body: binary.
-
 | Field          | Type   | Bytes      |
 | -------------- | ------ | ---------- |
 | transaction_id | uint32 | 4          |
 | chunk_index    | uint8  | 1          |
-| chunk_size     | uint16 | 2          |
+| chunk_size     | uint8  | 1          |
 | chunk_data     | binary | chunk_size |
 
 `chunk_size` is the length in bytes of `chunk_data`. Fragments are reassembled by `transaction_id` and ordered by `chunk_index`.
+
+---
+
+## Usage
+
+- **Encode** a message: `PPNet.encode_message(message)` returns a single binary, or a list `[header_binary | chunk_binaries]` when the message is chunked (e.g. large image). You can pass `limit: n` to force chunking when the encoded size would exceed `n` bytes (default 254).
+
+- **Parse** a stream: `PPNet.parse(binary)` returns `%{messages: [...], errors: [...]}`. Each element of `messages` is either a decoded message struct (Hello, Ping, etc.) or a `ChunckedMessageHeader` / `ChunckedMessageBody`. Join all frames (e.g. from a stream) and call `parse` on the concatenated binary.
+
+- **Reassemble** chunked payloads: when you have `[%ChunckedMessageHeader{} | chunks]` from `parse`, call `PPNet.chuncked_to_message([header | chunks])` to get `{:ok, message}` (or `{:error, reason}`). The result is the original message type (e.g. `%Image{}`, `%Ping{}`).
+
+Example (chunked image):
+
+```elixir
+image = %PPNet.Message.Image{data: raw_binary, format: :webp}
+[header_bin | chunk_bins] = PPNet.encode_message(image, limit: 200)
+payload = [header_bin | chunk_bins] |> Enum.join()
+%{messages: [header | body_messages], errors: []} = PPNet.parse(payload)
+{:ok, ^image} = PPNet.chuncked_to_message([header | body_messages])
+```

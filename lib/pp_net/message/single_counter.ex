@@ -23,16 +23,12 @@ defmodule PPNet.Message.SingleCounter do
     * `value` - The value of the counter
     * `pulses` - The number of pulses
     * `duration_ms` - The duration of the counter in milliseconds
-    * `checksum` - The checksum of the message
-    * `valid` - Whether the message is valid
     """
 
     field(:kind, String.t(), enforce: true)
     field(:value, any(), enforce: true)
     field(:pulses, integer(), enforce: true)
     field(:duration_ms, integer(), enforce: true)
-    field(:checksum, non_neg_integer())
-    field(:valid, boolean())
   end
 
   @impl true
