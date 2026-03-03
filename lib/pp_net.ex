@@ -40,20 +40,6 @@ defmodule PPNet do
     @chuncked_message_body_type_code
   ]
 
-  def run do
-    image = File.read!("test/support/static/image.webp")
-
-    limit = 200
-    messages = encode_chunked_message(image, Image, limit: limit)
-
-    IO.puts("Binary size: #{byte_size(image)}")
-    IO.puts("Total messages: #{length(messages)} + 1 header message")
-    IO.puts("ImageBody header size: 7")
-    IO.puts("ImageBody chunk size: 200")
-    IO.puts("Bynary bytes per message: #{limit - 13}")
-    IO.puts("Total overhead: #{100 * 13 / limit}%")
-  end
-
   def encode_message(%module{} = message, opts \\ []) do
     limit = get_limit(opts)
 
@@ -79,6 +65,7 @@ defmodule PPNet do
     end
   end
 
+  # credo:disable-for-next-line
   defp encode_chunked_message(binary, module, opts) do
     limit = get_limit(opts)
     # type (1 byte) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (1 byte)
@@ -123,6 +110,7 @@ defmodule PPNet do
 
   def parse(data) when is_list(data), do: parse(IO.iodata_to_binary(data))
 
+  # credo:disable-for-next-line
   def parse(binary) when is_binary(binary) do
     binary
     |> :binary.split(@delimiter, [:global, :trim])
@@ -130,9 +118,7 @@ defmodule PPNet do
       with {:ok, cobs_decoded} <- cobs_decode(cobs_encoded),
            {:ok, {rs_corrected, err_count}} <- rs_correct(cobs_decoded),
            {:ok, message} <- decode_line(rs_corrected) do
-        if err_count > 0 do
-          Logger.info("Reed-Solomon corrected #{err_count} errors in message of type #{message.__struct__}")
-        end
+        maybe_log_error(message, err_count)
 
         {[message | messages], errors}
       else
@@ -151,6 +137,12 @@ defmodule PPNet do
     end)
   end
 
+  defp maybe_log_error(_message, 0), do: :ok
+
+  defp maybe_log_error(%{__struct__: struct}, err_count) do
+    Logger.info("Reed-Solomon corrected #{err_count} errors in message of type #{struct}")
+  end
+
   defp cobs_decode(data) do
     case Cobs.decode(data) do
       {:ok, cobs_decoded} ->
@@ -159,6 +151,19 @@ defmodule PPNet do
       {:error, reason} ->
         {:error, build_error(data, {:cobs, reason})}
     end
+  end
+
+  defp rs_correct(data) do
+    case ReedSolomonEx.correct_err_count(data, 8) do
+      {:ok, {rs_corrected, err_count}} ->
+        {:ok, {rs_corrected, err_count}}
+
+      {:error, reason} ->
+        {:error, build_error(data, {:reed_solomon, reason})}
+    end
+  rescue
+    error ->
+      {:error, build_error(data, {:reed_solomon, error})}
   end
 
   def chuncked_to_message([
@@ -190,19 +195,6 @@ defmodule PPNet do
 
   def chuncked_to_message([%ChunckedMessageHeader{} | _chunks] = chuncked_message) do
     {:error, build_error(chuncked_message, :missing_chunks)}
-  end
-
-  defp rs_correct(data) do
-    case ReedSolomonEx.correct_err_count(data, 8) do
-      {:ok, {rs_corrected, err_count}} ->
-        {:ok, {rs_corrected, err_count}}
-
-      {:error, reason} ->
-        {:error, build_error(data, {:reed_solomon, reason})}
-    end
-  rescue
-    error ->
-      {:error, build_error(data, {:reed_solomon, error})}
   end
 
   defp decode_line(<<type_code::unsigned-integer-size(1)-unit(8), packaged_body::binary>> = data)
