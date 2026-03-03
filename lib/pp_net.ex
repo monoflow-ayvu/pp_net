@@ -65,6 +65,7 @@ defmodule PPNet do
     end
   end
 
+  # credo:disable-for-next-line
   defp encode_chunked_message(binary, module, opts) do
     limit = get_limit(opts)
     # type (1 byte) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (1 byte)
@@ -109,6 +110,7 @@ defmodule PPNet do
 
   def parse(data) when is_list(data), do: parse(IO.iodata_to_binary(data))
 
+  # credo:disable-for-next-line
   def parse(binary) when is_binary(binary) do
     binary
     |> :binary.split(@delimiter, [:global, :trim])
