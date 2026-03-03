@@ -27,6 +27,16 @@ defmodule PPNet do
   @chuncked_message_header_type_code 6
   @chuncked_message_body_type_code 7
 
+  @type_codes [
+    @hello_type_code,
+    @single_counter_type_code,
+    @ping_type_code,
+    @event_type_code,
+    @image_type_code,
+    @chuncked_message_header_type_code,
+    @chuncked_message_body_type_code
+  ]
+
   def run do
     image = File.read!("test/support/static/image.webp")
 
@@ -193,7 +203,7 @@ defmodule PPNet do
   end
 
   defp decode_line(<<type_code::unsigned-integer-size(1)-unit(8), packaged_body::binary>> = data)
-       when type_code in [@hello_type_code, @single_counter_type_code, @ping_type_code, @event_type_code] do
+       when type_code in @type_codes do
     case to_message_type(type_code).parse(packaged_body) do
       {:ok, message} ->
         {:ok, message}
@@ -202,38 +212,6 @@ defmodule PPNet do
         error = build_error(type_code, packaged_body, reason, data)
         {:error, error}
     end
-  end
-
-  defp decode_line(
-         <<@chuncked_message_header_type_code::unsigned-integer-size(1)-unit(8),
-           message_module_code::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
-           datetime_unix::unsigned-integer-size(4)-unit(8), total_chunks::unsigned-integer-size(2)-unit(8)>>
-       ) do
-    {:ok, datetime} = DateTime.from_unix(datetime_unix)
-
-    message = %ChunckedMessageHeader{
-      message_module: to_message_type(message_module_code),
-      transaction_id: transaction_id,
-      datetime: datetime,
-      total_chunks: total_chunks
-    }
-
-    {:ok, message}
-  end
-
-  defp decode_line(
-         <<@chuncked_message_body_type_code::unsigned-integer-size(1)-unit(8),
-           transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(2)-unit(8),
-           chunk_size::unsigned-integer-size(1)-unit(8), chunk_data::binary-size(chunk_size)-unit(8)>>
-       ) do
-    message = %ChunckedMessageBody{
-      transaction_id: transaction_id,
-      chunk_index: chunk_index,
-      chunk_size: chunk_size,
-      chunk_data: chunk_data
-    }
-
-    {:ok, message}
   end
 
   defp decode_line(data), do: {:error, build_error(data)}

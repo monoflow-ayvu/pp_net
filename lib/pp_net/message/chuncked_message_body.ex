@@ -6,6 +6,9 @@ defmodule PPNet.Message.ChunckedMessageBody do
 
   use TypedStruct
 
+  alias PPNet.Message.ChunckedMessageBody
+  alias PPNet.ParseError
+
   @type_code 7
 
   typedstruct do
@@ -29,7 +32,26 @@ defmodule PPNet.Message.ChunckedMessageBody do
   end
 
   @impl true
-  def parse(data) when is_binary(data) do
-    raise "Not implemented"
+  def parse(
+        <<transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(2)-unit(8),
+          chunk_size::unsigned-integer-size(1)-unit(8), chunk_data::binary-size(chunk_size)-unit(8)>>
+      ) do
+    message = %ChunckedMessageBody{
+      transaction_id: transaction_id,
+      chunk_index: chunk_index,
+      chunk_size: chunk_size,
+      chunk_data: chunk_data
+    }
+
+    {:ok, message}
+  end
+
+  def parse(data) when is_list(data) do
+    {:error,
+     %ParseError{
+       message: "The message body does not match the expected format",
+       reason: :unknown_format,
+       data: {:body, data}
+     }}
   end
 end
