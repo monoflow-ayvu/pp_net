@@ -24,7 +24,7 @@ defmodule PPNet.Message.ChunckedMessageHeader do
       message.message_module.type_code()::unsigned-integer-size(1)-unit(8),
       message.transaction_id::unsigned-integer-size(4)-unit(8),
       DateTime.to_unix(message.datetime)::unsigned-integer-size(4)-unit(8),
-      message.total_chunks::unsigned-integer-size(1)-unit(8)
+      message.total_chunks::unsigned-integer-size(2)-unit(8)
     >>
   end
 

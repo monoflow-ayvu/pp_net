@@ -22,7 +22,7 @@ defmodule PPNet.Message.ChunckedMessageBody do
   def pack(%__MODULE__{} = body) do
     <<
       body.transaction_id::unsigned-integer-size(4)-unit(8),
-      body.chunk_index::unsigned-integer-size(1)-unit(8),
+      body.chunk_index::unsigned-integer-size(2)-unit(8),
       body.chunk_size::unsigned-integer-size(1)-unit(8),
       body.chunk_data::binary-size(body.chunk_size)-unit(8)
     >>

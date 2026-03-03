@@ -44,8 +44,8 @@ defmodule PPNet do
 
     packaged_data = module.pack(message)
 
-    # type (1 byte) + packaged_data + Reed-Solomon overhead (4 bytes) + separator (1 byte)
-    total_size = 1 + byte_size(packaged_data) + 4 + 1
+    # type (1 byte) + packaged_data + Reed-Solomon overhead (8 bytes) + separator (1 byte)
+    total_size = 1 + byte_size(packaged_data) + 8 + 1
     cops_overhead = ceil(total_size / 254)
 
     if total_size + cops_overhead <= limit do
@@ -54,7 +54,7 @@ defmodule PPNet do
         packaged_data::binary-size(byte_size(packaged_data))-unit(8)
       >>
 
-      {:ok, rs_encoded} = ReedSolomonEx.encode(message, 4)
+      {:ok, rs_encoded} = ReedSolomonEx.encode(message, 8)
 
       rs_encoded
       |> Cobs.encode!()
@@ -67,8 +67,8 @@ defmodule PPNet do
   defp encode_chunked_message(binary, module, opts) do
     limit = get_limit(opts)
     # type (1 byte) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (1 byte)
-    # + ReedSolomon overhead (4 bytes) + separator (1 byte)
-    chunk_header_size = 13
+    # + ReedSolomon overhead (8 bytes) + separator (1 byte)
+    chunk_header_size = 17
     cops_overhead = ceil(255 / 254)
     chunk_size = limit - chunk_header_size - cops_overhead
     transaction_id = transaction_id()
@@ -113,7 +113,7 @@ defmodule PPNet do
     |> :binary.split(<<0>>, [:global, :trim])
     |> Enum.reduce({[], []}, fn cobs_encoded, {messages, errors} ->
       with {:ok, cobs_decoded} <- cobs_decode(cobs_encoded),
-           {:ok, rs_corrected} <- rs_correct(cobs_decoded),
+           {:ok, {rs_corrected, _err_count}} <- rs_correct(cobs_decoded),
            {:ok, message} <- decode_line(rs_corrected) do
         {[message | messages], errors}
       else
@@ -174,9 +174,9 @@ defmodule PPNet do
   end
 
   defp rs_correct(data) do
-    case ReedSolomonEx.correct(data, 4) do
-      {:ok, rs_corrected} ->
-        {:ok, rs_corrected}
+    case ReedSolomonEx.correct_err_count(data, 8) do
+      {:ok, {rs_corrected, err_count}} ->
+        {:ok, {rs_corrected, err_count}}
 
       {:error, reason} ->
         {:error, build_error(data, {:reed_solomon, reason})}
@@ -201,7 +201,7 @@ defmodule PPNet do
   defp decode_line(
          <<@chuncked_message_header_type_code::unsigned-integer-size(1)-unit(8),
            message_module_code::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
-           datetime_unix::unsigned-integer-size(4)-unit(8), total_chunks::unsigned-integer-size(1)-unit(8)>>
+           datetime_unix::unsigned-integer-size(4)-unit(8), total_chunks::unsigned-integer-size(2)-unit(8)>>
        ) do
     {:ok, datetime} = DateTime.from_unix(datetime_unix)
 
@@ -217,7 +217,7 @@ defmodule PPNet do
 
   defp decode_line(
          <<@chuncked_message_body_type_code::unsigned-integer-size(1)-unit(8),
-           transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(1)-unit(8),
+           transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(2)-unit(8),
            chunk_size::unsigned-integer-size(1)-unit(8), chunk_data::binary-size(chunk_size)-unit(8)>>
        ) do
     message = %ChunckedMessageBody{
