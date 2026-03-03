@@ -153,6 +153,19 @@ defmodule PPNet do
     end
   end
 
+  defp rs_correct(data) do
+    case ReedSolomonEx.correct_err_count(data, 8) do
+      {:ok, {rs_corrected, err_count}} ->
+        {:ok, {rs_corrected, err_count}}
+
+      {:error, reason} ->
+        {:error, build_error(data, {:reed_solomon, reason})}
+    end
+  rescue
+    error ->
+      {:error, build_error(data, {:reed_solomon, error})}
+  end
+
   def chuncked_to_message([
         %ChunckedMessageHeader{
           message_module: message_module,
@@ -182,19 +195,6 @@ defmodule PPNet do
 
   def chuncked_to_message([%ChunckedMessageHeader{} | _chunks] = chuncked_message) do
     {:error, build_error(chuncked_message, :missing_chunks)}
-  end
-
-  defp rs_correct(data) do
-    case ReedSolomonEx.correct_err_count(data, 8) do
-      {:ok, {rs_corrected, err_count}} ->
-        {:ok, {rs_corrected, err_count}}
-
-      {:error, reason} ->
-        {:error, build_error(data, {:reed_solomon, reason})}
-    end
-  rescue
-    error ->
-      {:error, build_error(data, {:reed_solomon, error})}
   end
 
   defp decode_line(<<type_code::unsigned-integer-size(1)-unit(8), packaged_body::binary>> = data)

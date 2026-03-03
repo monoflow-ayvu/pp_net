@@ -19,7 +19,8 @@ defmodule PpNet.MixProject do
         "coveralls.post": :test,
         "coveralls.html": :test,
         "coveralls.cobertura": :test
-      ]
+      ],
+      dialyzer: [ignore_warnings: "dialyzer_ignore_warnings.exs"]
     ]
   end
 
