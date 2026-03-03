@@ -131,7 +131,7 @@ defmodule PPNet do
            {:ok, {rs_corrected, err_count}} <- rs_correct(cobs_decoded),
            {:ok, message} <- decode_line(rs_corrected) do
         if err_count > 0 do
-          Logger.info("Reed-Solomon corrected #{err_count} errors in message")
+          Logger.info("Reed-Solomon corrected #{err_count} errors in message of type #{message.__struct__}")
         end
 
         {[message | messages], errors}

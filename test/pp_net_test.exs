@@ -82,7 +82,7 @@ defmodule PPNetTest do
                errors: []
              }
 
-      assert log =~ "Reed-Solomon corrected 1 errors in message"
+      assert log =~ "Reed-Solomon corrected 1 errors in message of type #{Hello}"
     end
 
     test "parse/1 with invalid binary data" do
