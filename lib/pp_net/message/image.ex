@@ -1,4 +1,8 @@
 defmodule PPNet.Message.Image do
+  @moduledoc """
+  This module defines the `PPNet.Message.Image` struct and provides functions to parse
+  a binary or list representation of an Image message into this struct.
+  """
   @behaviour PPNet.Message
 
   use TypedStruct

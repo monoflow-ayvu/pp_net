@@ -40,20 +40,6 @@ defmodule PPNet do
     @chuncked_message_body_type_code
   ]
 
-  def run do
-    image = File.read!("test/support/static/image.webp")
-
-    limit = 200
-    messages = encode_chunked_message(image, Image, limit: limit)
-
-    IO.puts("Binary size: #{byte_size(image)}")
-    IO.puts("Total messages: #{length(messages)} + 1 header message")
-    IO.puts("ImageBody header size: 7")
-    IO.puts("ImageBody chunk size: 200")
-    IO.puts("Bynary bytes per message: #{limit - 13}")
-    IO.puts("Total overhead: #{100 * 13 / limit}%")
-  end
-
   def encode_message(%module{} = message, opts \\ []) do
     limit = get_limit(opts)
 
@@ -130,9 +116,7 @@ defmodule PPNet do
       with {:ok, cobs_decoded} <- cobs_decode(cobs_encoded),
            {:ok, {rs_corrected, err_count}} <- rs_correct(cobs_decoded),
            {:ok, message} <- decode_line(rs_corrected) do
-        if err_count > 0 do
-          Logger.info("Reed-Solomon corrected #{err_count} errors in message of type #{message.__struct__}")
-        end
+        maybe_log_error(message, err_count)
 
         {[message | messages], errors}
       else
@@ -149,6 +133,12 @@ defmodule PPNet do
     |> then(fn {messages, errors} ->
       %{messages: Enum.reverse(messages), errors: Enum.reverse(errors)}
     end)
+  end
+
+  defp maybe_log_error(_message, 0), do: :ok
+
+  defp maybe_log_error(%{__struct__: struct}, err_count) do
+    Logger.info("Reed-Solomon corrected #{err_count} errors in message of type #{struct}")
   end
 
   defp cobs_decode(data) do

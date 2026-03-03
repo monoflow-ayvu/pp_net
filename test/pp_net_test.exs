@@ -145,7 +145,9 @@ defmodule PPNetTest do
       [encoded_header | encoded_chunks] = PPNet.encode_message(hello, limit: 35)
 
       assert %{messages: [decoded_header | decoded_chunks], errors: []} =
-               [encoded_header | encoded_chunks] |> Enum.join() |> PPNet.parse()
+               [encoded_header | encoded_chunks]
+               |> Enum.join()
+               |> PPNet.parse()
 
       assert decoded_header.message_module == Hello
       assert decoded_header.total_chunks == length(decoded_chunks)
@@ -316,7 +318,9 @@ defmodule PPNetTest do
       [encoded_header | encoded_chunks] = PPNet.encode_message(message, limit: 25)
 
       assert %{messages: [decoded_header | decoded_chunks], errors: []} =
-               [encoded_header | encoded_chunks] |> Enum.join() |> PPNet.parse()
+               [encoded_header | encoded_chunks]
+               |> Enum.join()
+               |> PPNet.parse()
 
       assert decoded_header.message_module == Ping
       assert decoded_header.total_chunks == length(decoded_chunks)
@@ -368,7 +372,9 @@ defmodule PPNetTest do
       [encoded_header | encoded_chunks] = PPNet.encode_message(message, limit: 35)
 
       assert %{messages: [decoded_header | decoded_chunks], errors: []} =
-               [encoded_header | encoded_chunks] |> Enum.join() |> PPNet.parse()
+               [encoded_header | encoded_chunks]
+               |> Enum.join()
+               |> PPNet.parse()
 
       assert decoded_header.message_module == Event
       assert decoded_header.total_chunks == length(decoded_chunks)
