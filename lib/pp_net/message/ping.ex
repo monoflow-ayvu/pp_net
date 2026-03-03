@@ -19,12 +19,16 @@ defmodule PPNet.Message.Ping do
     """
     field(:temperature, float(), enforce: true)
     field(:uptime_ms, integer(), enforce: true)
-    field(:location, %{lat: float(), lon: float(), accuracy: integer()}, enforce: true)
+
+    field(:location, %{required(:lat) => float(), required(:lon) => float(), required(:accuracy) => integer()},
+      enforce: true
+    )
+
     field(:cpu, float(), enforce: true)
     field(:tpu_memory_percent, integer(), enforce: true)
     field(:tpu_ping_ms, integer(), enforce: true)
-    field(:wifi, list(%{mac: String.t(), rssi: integer()}), enforce: true)
-    field(:storage, %{total: integer(), used: integer(), free: integer()}, enforce: true)
+    field(:wifi, list(%{required(:mac) => String.t(), required(:rssi) => integer()}), default: [])
+    field(:storage, %{required(:total) => integer(), required(:used) => integer()}, enforce: true)
     field(:extra, %{optional(String.t()) => any()}, default: %{})
   end
 
@@ -60,7 +64,6 @@ defmodule PPNet.Message.Ping do
   @impl true
   def parse(packaged_body) when is_binary(packaged_body) do
     with {:ok, unpacked_body} <- Msgpax.unpack(packaged_body) do
-      dbg(unpacked_body)
       parse(unpacked_body)
     end
   end
@@ -97,12 +100,12 @@ defmodule PPNet.Message.Ping do
   end
 
   defp parse_wifi(wifi) when is_list(wifi), do: Enum.map(wifi, &parse_wifi_item/1)
+
   defp parse_wifi_item(<<mac::binary-size(6), rssi::signed-integer-size(1)-unit(8)>>) do
     mac_str =
       mac
       |> :binary.bin_to_list()
-      |> Enum.map(&String.pad_leading(Integer.to_string(&1, 16), 2, "0"))
-      |> Enum.join(":")
+      |> Enum.map_join(":", &String.pad_leading(Integer.to_string(&1, 16), 2, "0"))
 
     %{mac: mac_str, rssi: rssi}
   end
@@ -112,6 +115,7 @@ defmodule PPNet.Message.Ping do
   end
 
   defp pack_wifi(wifi) when is_list(wifi), do: Enum.map(wifi, &pack_wifi_item/1)
+
   defp pack_wifi_item(%{mac: mac, rssi: rssi}) do
     mac_binary =
       mac
