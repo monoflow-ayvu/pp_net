@@ -19,6 +19,9 @@ defmodule PPNet do
   @limit 254
   # Minimun chunk size is 17 bytes because this is the size of ChunckedMessageHeader
   @min_chunk_size 17
+
+  @delimiter <<0>>
+
   @hello_type_code 1
   @single_counter_type_code 2
   @ping_type_code 3
@@ -70,7 +73,7 @@ defmodule PPNet do
 
       rs_encoded
       |> Cobs.encode!()
-      |> Kernel.<>(<<0>>)
+      |> Kernel.<>(@delimiter)
     else
       encode_chunked_message(packaged_data, module, opts)
     end
@@ -81,7 +84,7 @@ defmodule PPNet do
     # type (1 byte) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (1 byte)
     # + ReedSolomon overhead (8 bytes) + separator (1 byte)
     chunk_header_size = 17
-    cops_overhead = ceil(255 / 254)
+    cops_overhead = ceil(limit / 254)
     chunk_size = limit - chunk_header_size - cops_overhead
     transaction_id = transaction_id()
     datetime = DateTime.utc_now()
@@ -122,7 +125,7 @@ defmodule PPNet do
 
   def parse(binary) when is_binary(binary) do
     binary
-    |> :binary.split(<<0>>, [:global, :trim])
+    |> :binary.split(@delimiter, [:global, :trim])
     |> Enum.reduce({[], []}, fn cobs_encoded, {messages, errors} ->
       with {:ok, cobs_decoded} <- cobs_decode(cobs_encoded),
            {:ok, {rs_corrected, err_count}} <- rs_correct(cobs_decoded),

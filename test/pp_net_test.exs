@@ -441,7 +441,7 @@ defmodule PPNetTest do
                  %ChunckedMessageHeader{
                    message_module: Image,
                    transaction_id: transaction_id,
-                   total_chunks: 116
+                   total_chunks: 115
                  } = header
                  | chunks
                ]
