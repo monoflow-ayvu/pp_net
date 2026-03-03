@@ -16,14 +16,6 @@ jobs:
     env:
       MIX_ENV: test
 
-    services:
-      firestore:
-        image: 178inaba/firestore-emulator
-        env:
-          FIRESTORE_PROJECT_ID: my-project
-        ports:
-          - 8200:8080
-
     steps:
       - uses: actions/checkout@v4
 
