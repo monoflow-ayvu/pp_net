@@ -1,6 +1,8 @@
 defmodule PPNetTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias PPNet.Message.ChunckedMessageBody
   alias PPNet.Message.ChunckedMessageHeader
   alias PPNet.Message.Event
@@ -8,6 +10,8 @@ defmodule PPNetTest do
   alias PPNet.Message.Image
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
+
+  require Logger
 
   describe "decode PPNet.Message.Hello" do
     test "parse/1 with valid binary data" do
@@ -52,6 +56,33 @@ defmodule PPNetTest do
                ],
                errors: []
              } = PPNet.parse(payload)
+    end
+
+    test "parse/1 with valid binary data when payload is corrupted" do
+      payload =
+        <<0x29, 0x01, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
+          0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0x8F, 0xA5, 0x77,
+          0xCC, 0xD7, 0x9B, 0x4C, 0xF4, 0x00>>
+
+      <<a::binary-size(3)-unit(8), _b::binary-size(1)-unit(8), rest::binary>> = payload
+      corrupted = <<a::binary-size(3)-unit(8), 1::unsigned-integer-size(1)-unit(8), rest::binary>>
+      {result, log} = with_log(fn -> PPNet.parse(corrupted) end)
+
+      assert result == %{
+               messages: [
+                 %Hello{
+                   version: 4660,
+                   ppnet_version: 1,
+                   boot_id: 87_372_886,
+                   board_version: 17_185,
+                   board_identifier: "Tester",
+                   unique_id: "TestRunner"
+                 }
+               ],
+               errors: []
+             }
+
+      assert log =~ "Reed-Solomon corrected 1 errors in message"
     end
 
     test "parse/1 with invalid binary data" do

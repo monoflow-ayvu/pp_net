@@ -12,6 +12,8 @@ defmodule PPNet do
   alias PPNet.Message.SingleCounter
   alias PPNet.ParseError
 
+  require Logger
+
   # Reed-Solomon is limited to 255 bytes inclusive
   # Cops is limited to 255 bytes exclusive
   @limit 254
@@ -113,8 +115,12 @@ defmodule PPNet do
     |> :binary.split(<<0>>, [:global, :trim])
     |> Enum.reduce({[], []}, fn cobs_encoded, {messages, errors} ->
       with {:ok, cobs_decoded} <- cobs_decode(cobs_encoded),
-           {:ok, {rs_corrected, _err_count}} <- rs_correct(cobs_decoded),
+           {:ok, {rs_corrected, err_count}} <- rs_correct(cobs_decoded),
            {:ok, message} <- decode_line(rs_corrected) do
+        if err_count > 0 do
+          Logger.info("Reed-Solomon corrected #{err_count} errors in message")
+        end
+
         {[message | messages], errors}
       else
         {:error, %ParseError{} = error} ->
