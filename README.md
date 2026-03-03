@@ -90,13 +90,21 @@ Body: MessagePack array.
 
 ### Type 3 — Ping
 
-Body: MessagePack array. Minimum format: `[temperature, uptime_ms]`. Optional third element: map `extra`.
+Body: MessagePack array. **Minimum format:** `[temperature, uptime_ms]` (2 elements). **Full format:** 9 elements in order:
 
-| Field       | Type    |
-| ----------- | ------- |
-| temperature | float   |
-| uptime_ms   | integer |
-| extra       | map (optional) |
+| Field               | Type    | Wire format / notes |
+| ------------------- | ------- | ------------------- |
+| temperature         | float   | —                   |
+| uptime_ms           | integer | —                   |
+| location            | map     | `[lat, lon, accuracy]` (3 elements: float, float, integer) |
+| cpu                 | float   | —                   |
+| tpu_memory_percent  | integer | % of TPU memory     |
+| tpu_ping_ms         | integer | TPU ping time (ms)   |
+| wifi                | list    | List of **7-byte binaries**: 6 bytes MAC (raw) + 1 byte RSSI (signed int8, dBm). |
+| storage             | map     | `[total, used]` (2 integers, bytes) |
+| extra               | map     | Optional key/value data |
+
+**WiFi encoding:** Each entry is 7 bytes: MAC address as 6 raw bytes (no colon-separated string), then RSSI as one signed byte. This keeps the payload small so the ping stays within a single frame.
 
 ---
 
