@@ -1,5 +1,5 @@
 {
-  "skip_files": ["lib/pplus_firestore/token_fetcher_mock.ex"],
+  "skip_files": [],
   "custom_stop_words": [],
   "coverage_options": {
     "minimum_coverage": 100

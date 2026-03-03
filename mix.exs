@@ -61,7 +61,7 @@ defmodule PpNet.MixProject do
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
       maintainers: ["JVMartyns", "Fernando Mumbach"],
-      description: "A wrapper that simplifies interactions with the official Cloud Firestore API"
+      description: "Message protocol with error correction (Reed-Solomon) and framing (COBS)"
     }
   end
 end
