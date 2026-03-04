@@ -45,11 +45,10 @@ defmodule PPNet do
 
     packaged_data = module.pack(message)
 
-    # type (1 byte) + packaged_data + Reed-Solomon overhead (8 bytes) + separator (1 byte)
-    total_size = 1 + byte_size(packaged_data) + 8 + 1
-    cops_overhead = ceil(total_size / 254)
+    # type (1 byte) + packaged_data + Reed-Solomon overhead (8 bytes) + COBS overhead (1 byte) + separator (1 byte)
+    total_size = 1 + byte_size(packaged_data) + 8 + 1 + 1
 
-    if total_size + cops_overhead <= limit do
+    if total_size <= limit do
       message = <<
         module.type_code()::unsigned-integer-size(1)-unit(8),
         packaged_data::binary-size(byte_size(packaged_data))-unit(8)
@@ -69,10 +68,9 @@ defmodule PPNet do
   defp encode_chunked_message(binary, module, opts) do
     limit = get_limit(opts)
     # type (1 byte) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (1 byte)
-    # + ReedSolomon overhead (8 bytes) + separator (1 byte)
-    chunk_header_size = 17
-    cops_overhead = ceil(limit / 254)
-    chunk_size = limit - chunk_header_size - cops_overhead
+    # + ReedSolomon overhead (8 bytes) + COBS overhead (1 byte) + separator (1 byte)
+    chunk_header_size = 18
+    chunk_size = limit - chunk_header_size
     transaction_id = transaction_id()
     datetime = DateTime.utc_now()
 
