@@ -112,10 +112,10 @@ Body: MessagePack array. **Minimum format:** `[temperature, uptime_ms]` (2 eleme
 
 Body: MessagePack array `[kind, data]`.
 
-| Field | Type   |
-| ----- | ------ |
-| kind  | string |
-| data  | map    |
+| Field | Type    | Notes |
+| ----- | ------- | ----- |
+| kind  | integer | 1 = detection |
+| data  | map     | Example payload: `{"image_id" => <16-byte UUID binary>, "d" => [...]}` |
 
 ---
 
@@ -125,6 +125,7 @@ Body: fixed header + raw image data.
 
 | Field  | Type   | Bytes      |
 | ------ | ------ | ---------- |
+| id     | binary | 16 (UUIDv4)|
 | format | uint8  | 1 (1=jpeg, 2=webp, 3=png) |
 | data   | binary | variable   |
 
