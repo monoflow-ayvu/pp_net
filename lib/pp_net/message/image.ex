@@ -15,8 +15,10 @@ defmodule PPNet.Message.Image do
   @format_to_code %{jpeg: 1, webp: 2, png: 3}
   @code_to_format Map.new(@format_to_code, fn {k, v} -> {v, k} end)
 
+  @type uuidv4 :: String.t()
+
   typedstruct do
-    field(:id, UUID.t(), enforce: true)
+    field(:id, uuidv4(), enforce: true)
     field(:format, format(), enforce: true)
     field(:data, binary(), enforce: true)
   end
