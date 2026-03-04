@@ -12,8 +12,11 @@ defmodule PPNet.Message.Image do
   @type_code 5
 
   @type format :: :jpeg | :webp | :png
+  # 128 bits = 16 bytes
+  @type binary16() :: <<_::128>>
 
   typedstruct do
+    field(:id, binary16(), enforce: true)
     field(:format, format(), enforce: true)
     field(:data, binary(), enforce: true)
   end
@@ -24,14 +27,15 @@ defmodule PPNet.Message.Image do
   @impl true
   def pack(%__MODULE__{} = message) do
     <<
+      message.id::binary-size(16)-unit(8),
       format_to_code(message.format)::unsigned-integer-size(1)-unit(8),
       message.data::binary-size(byte_size(message.data))-unit(8)
     >>
   end
 
   @impl true
-  def parse(<<format_code::unsigned-integer-size(1)-unit(8), data::binary>>) do
-    {:ok, %__MODULE__{data: data, format: code_to_format(format_code)}}
+  def parse(<<id::binary-size(16)-unit(8), format_code::unsigned-integer-size(1)-unit(8), data::binary>>) do
+    {:ok, %__MODULE__{id: id, data: data, format: code_to_format(format_code)}}
   end
 
   def parse(data) do
