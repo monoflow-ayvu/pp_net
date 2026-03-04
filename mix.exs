@@ -2,11 +2,12 @@ defmodule PpNet.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/monoflow-ayvu/pp_net"
+  @version "0.1.0"
 
   def project do
     [
       app: :pp_net,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -64,5 +65,15 @@ defmodule PpNet.MixProject do
       maintainers: ["JVMartyns", "Fernando Mumbach"],
       description: "Message protocol with error correction (Reed-Solomon) and framing (COBS)"
     }
+  end
+
+  def docs do
+    [
+      name: "PPNet",
+      source_ref: "v#{@version}",
+      source_url: @source_url,
+      main: "readme",
+      extras: ["README.md", "LICENSE"]
+    ]
   end
 end
