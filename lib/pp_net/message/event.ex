@@ -11,7 +11,9 @@ defmodule PPNet.Message.Event do
 
   @type_code 4
   @type event_kind :: :detection
-  @valid_event_kind_codes [1]
+  @event_kind_to_code %{detection: 1}
+  @code_to_event_kind Map.new(@event_kind_to_code, fn {k, v} -> {v, k} end)
+  @valid_event_kind_codes Map.values(@event_kind_to_code)
 
   typedstruct do
     field(:kind, event_kind(), enforce: true)
@@ -24,7 +26,7 @@ defmodule PPNet.Message.Event do
   @impl true
   def pack(%__MODULE__{} = event) do
     Msgpax.pack!(
-      [event_kind_to_code(event.kind), event.data],
+      [@event_kind_to_code[event.kind], event.data],
       iodata: false
     )
   end
@@ -37,7 +39,7 @@ defmodule PPNet.Message.Event do
   end
 
   def parse([kind_code, data]) when kind_code in @valid_event_kind_codes and is_map(data) do
-    {:ok, %__MODULE__{kind: code_to_event_kind(kind_code), data: data}}
+    {:ok, %__MODULE__{kind: @code_to_event_kind[kind_code], data: data}}
   end
 
   def parse(unpacked_body) when is_list(unpacked_body) do
@@ -48,7 +50,4 @@ defmodule PPNet.Message.Event do
        data: {:unpacked_body, unpacked_body}
      }}
   end
-
-  defp event_kind_to_code(:detection), do: 1
-  defp code_to_event_kind(1), do: :detection
 end
