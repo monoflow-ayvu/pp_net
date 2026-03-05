@@ -15,6 +15,7 @@ defmodule PPNet.Message.ChunckedMessageHeader do
   alias PPNet.ParseError
 
   @type_code 6
+  @derive Jason.Encoder
 
   @hello_type_code 1
   @single_counter_type_code 2

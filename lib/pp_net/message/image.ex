@@ -10,6 +10,7 @@ defmodule PPNet.Message.Image do
   alias PPNet.ParseError
 
   @type_code 5
+  @derive Jason.Encoder
 
   @type format :: :jpeg | :webp | :png
   @format_to_code %{jpeg: 1, webp: 2, png: 3}

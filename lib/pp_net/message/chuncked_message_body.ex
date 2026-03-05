@@ -10,6 +10,7 @@ defmodule PPNet.Message.ChunckedMessageBody do
   alias PPNet.ParseError
 
   @type_code 7
+  @derive Jason.Encoder
 
   typedstruct do
     field(:transaction_id, non_neg_integer(), enforce: true)

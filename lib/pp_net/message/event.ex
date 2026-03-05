@@ -9,6 +9,7 @@ defmodule PPNet.Message.Event do
 
   alias PPNet.ParseError
 
+  @derive Jason.Encoder
   @type_code 4
   @type event_kind :: :detection
   @event_kind_to_code %{detection: 1}
