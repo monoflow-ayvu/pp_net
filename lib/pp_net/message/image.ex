@@ -10,10 +10,16 @@ defmodule PPNet.Message.Image do
   alias PPNet.ParseError
 
   @type_code 5
+  @derive Jason.Encoder
 
   @type format :: :jpeg | :webp | :png
+  @format_to_code %{jpeg: 1, webp: 2, png: 3}
+  @code_to_format Map.new(@format_to_code, fn {k, v} -> {v, k} end)
+
+  @type uuidv4 :: String.t()
 
   typedstruct do
+    field(:id, uuidv4(), enforce: true)
     field(:format, format(), enforce: true)
     field(:data, binary(), enforce: true)
   end
@@ -24,14 +30,15 @@ defmodule PPNet.Message.Image do
   @impl true
   def pack(%__MODULE__{} = message) do
     <<
-      format_to_code(message.format)::unsigned-integer-size(1)-unit(8),
+      UUID.string_to_binary!(message.id)::binary-size(16)-unit(8),
+      @format_to_code[message.format]::unsigned-integer-size(1)-unit(8),
       message.data::binary-size(byte_size(message.data))-unit(8)
     >>
   end
 
   @impl true
-  def parse(<<format_code::unsigned-integer-size(1)-unit(8), data::binary>>) do
-    {:ok, %__MODULE__{data: data, format: code_to_format(format_code)}}
+  def parse(<<id::binary-size(16)-unit(8), format_code::unsigned-integer-size(1)-unit(8), data::binary>>) do
+    {:ok, %__MODULE__{id: UUID.binary_to_string!(id), data: data, format: @code_to_format[format_code]}}
   end
 
   def parse(data) do
@@ -42,11 +49,4 @@ defmodule PPNet.Message.Image do
        data: %{payload: data}
      }}
   end
-
-  defp format_to_code(:jpeg), do: 1
-  defp format_to_code(:webp), do: 2
-  defp format_to_code(:png), do: 3
-  defp code_to_format(1), do: :jpeg
-  defp code_to_format(2), do: :webp
-  defp code_to_format(3), do: :png
 end

@@ -1,15 +1,16 @@
-defmodule PPNet.Message.ChunckedMessageBody do
+defmodule PPNet.Message.ChunkedMessageBody do
   @moduledoc """
-  Body for the ChunckedMessage message.
+  Body for the ChunkedMessage message.
   """
   @behaviour PPNet.Message
 
   use TypedStruct
 
-  alias PPNet.Message.ChunckedMessageBody
+  alias PPNet.Message.ChunkedMessageBody
   alias PPNet.ParseError
 
   @type_code 7
+  @derive Jason.Encoder
 
   typedstruct do
     field(:transaction_id, non_neg_integer(), enforce: true)
@@ -36,7 +37,7 @@ defmodule PPNet.Message.ChunckedMessageBody do
         <<transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(2)-unit(8),
           chunk_size::unsigned-integer-size(1)-unit(8), chunk_data::binary-size(chunk_size)-unit(8)>>
       ) do
-    message = %ChunckedMessageBody{
+    message = %ChunkedMessageBody{
       transaction_id: transaction_id,
       chunk_index: chunk_index,
       chunk_size: chunk_size,

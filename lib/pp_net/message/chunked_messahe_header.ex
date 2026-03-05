@@ -1,12 +1,12 @@
-defmodule PPNet.Message.ChunckedMessageHeader do
+defmodule PPNet.Message.ChunkedMessageHeader do
   @moduledoc """
-  Header for the ChunckedMessage message.
+  Header for the ChunkedMessage message.
   """
   @behaviour PPNet.Message
 
   use TypedStruct
 
-  alias PPNet.Message.ChunckedMessageHeader
+  alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -15,6 +15,7 @@ defmodule PPNet.Message.ChunckedMessageHeader do
   alias PPNet.ParseError
 
   @type_code 6
+  @derive Jason.Encoder
 
   @hello_type_code 1
   @single_counter_type_code 2
@@ -49,7 +50,7 @@ defmodule PPNet.Message.ChunckedMessageHeader do
       ) do
     {:ok, datetime} = DateTime.from_unix(datetime_unix)
 
-    message = %ChunckedMessageHeader{
+    message = %ChunkedMessageHeader{
       message_module: to_message_type(message_module_code),
       transaction_id: transaction_id,
       datetime: datetime,

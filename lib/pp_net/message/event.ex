@@ -9,10 +9,15 @@ defmodule PPNet.Message.Event do
 
   alias PPNet.ParseError
 
+  @derive Jason.Encoder
   @type_code 4
+  @type event_kind :: :detection
+  @event_kind_to_code %{detection: 1}
+  @code_to_event_kind Map.new(@event_kind_to_code, fn {k, v} -> {v, k} end)
+  @valid_event_kind_codes Map.values(@event_kind_to_code)
 
   typedstruct do
-    field(:kind, String.t(), enforce: true)
+    field(:kind, event_kind(), enforce: true)
     field(:data, %{optional(String.t()) => any()}, enforce: true)
   end
 
@@ -22,7 +27,7 @@ defmodule PPNet.Message.Event do
   @impl true
   def pack(%__MODULE__{} = event) do
     Msgpax.pack!(
-      [event.kind, event.data],
+      [@event_kind_to_code[event.kind], event.data],
       iodata: false
     )
   end
@@ -34,8 +39,8 @@ defmodule PPNet.Message.Event do
     end
   end
 
-  def parse([kind, data]) when is_binary(kind) and is_map(data) do
-    {:ok, %__MODULE__{kind: kind, data: data}}
+  def parse([kind_code, data]) when kind_code in @valid_event_kind_codes and is_map(data) do
+    {:ok, %__MODULE__{kind: @code_to_event_kind[kind_code], data: data}}
   end
 
   def parse(unpacked_body) when is_list(unpacked_body) do
