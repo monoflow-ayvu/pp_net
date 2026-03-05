@@ -3,8 +3,8 @@ defmodule PPNet do
   This module defines the `PPNet` module, which provides functions to parse
   a binary or list representation of a message into a struct.
   """
-  alias PPNet.Message.ChunckedMessageBody
-  alias PPNet.Message.ChunckedMessageHeader
+  alias PPNet.Message.ChunkedMessageBody
+  alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -17,7 +17,7 @@ defmodule PPNet do
   # Reed-Solomon is limited to 255 bytes inclusive
   # Cops is limited to 255 bytes exclusive
   @limit 254
-  # Minimun chunk size is 17 bytes because this is the size of ChunckedMessageHeader
+  # Minimun chunk size is 17 bytes because this is the size of ChunkedMessageHeader
   @min_chunk_size 17
 
   @delimiter <<0>>
@@ -27,8 +27,8 @@ defmodule PPNet do
   @ping_type_code 3
   @event_type_code 4
   @image_type_code 5
-  @chuncked_message_header_type_code 6
-  @chuncked_message_body_type_code 7
+  @chunked_message_header_type_code 6
+  @chunked_message_body_type_code 7
 
   @type_codes [
     @hello_type_code,
@@ -36,8 +36,8 @@ defmodule PPNet do
     @ping_type_code,
     @event_type_code,
     @image_type_code,
-    @chuncked_message_header_type_code,
-    @chuncked_message_body_type_code
+    @chunked_message_header_type_code,
+    @chunked_message_body_type_code
   ]
 
   def encode_message(%module{} = message, opts \\ []) do
@@ -82,7 +82,7 @@ defmodule PPNet do
 
     total_chunks = length(chunks)
 
-    header = %ChunckedMessageHeader{
+    header = %ChunkedMessageHeader{
       message_module: module,
       transaction_id: transaction_id,
       datetime: datetime,
@@ -91,7 +91,7 @@ defmodule PPNet do
 
     messages =
       for {chunk, index} <- Enum.with_index(chunks) do
-        %ChunckedMessageBody{
+        %ChunkedMessageBody{
           transaction_id: transaction_id,
           chunk_index: index,
           chunk_size: byte_size(chunk),
@@ -164,8 +164,8 @@ defmodule PPNet do
       {:error, build_error(data, {:reed_solomon, error})}
   end
 
-  def chuncked_to_message([
-        %ChunckedMessageHeader{
+  def chunked_to_message([
+        %ChunkedMessageHeader{
           message_module: message_module,
           transaction_id: transaction_id,
           total_chunks: total_chunks
@@ -173,7 +173,7 @@ defmodule PPNet do
         | chunks
       ])
       when total_chunks == length(chunks) do
-    if Enum.all?(chunks, fn %ChunckedMessageBody{transaction_id: ^transaction_id} -> true end) do
+    if Enum.all?(chunks, fn %ChunkedMessageBody{transaction_id: ^transaction_id} -> true end) do
       binary =
         chunks
         |> Enum.sort_by(& &1.chunk_index)
@@ -191,8 +191,8 @@ defmodule PPNet do
     end
   end
 
-  def chuncked_to_message([%ChunckedMessageHeader{} | _chunks] = chuncked_message) do
-    {:error, build_error(chuncked_message, :missing_chunks)}
+  def chunked_to_message([%ChunkedMessageHeader{} | _chunks] = chunked_message) do
+    {:error, build_error(chunked_message, :missing_chunks)}
   end
 
   defp decode_line(<<type_code::unsigned-integer-size(1)-unit(8), packaged_body::binary>> = data)
@@ -234,8 +234,8 @@ defmodule PPNet do
   defp to_message_type(@ping_type_code), do: Ping
   defp to_message_type(@event_type_code), do: Event
   defp to_message_type(@image_type_code), do: Image
-  defp to_message_type(@chuncked_message_header_type_code), do: ChunckedMessageHeader
-  defp to_message_type(@chuncked_message_body_type_code), do: ChunckedMessageBody
+  defp to_message_type(@chunked_message_header_type_code), do: ChunkedMessageHeader
+  defp to_message_type(@chunked_message_body_type_code), do: ChunkedMessageBody
 
   defp transaction_id do
     <<int::unsigned-integer-size(4)-unit(8)>> = :crypto.strong_rand_bytes(4)

@@ -4,8 +4,8 @@ defmodule PPNetTest do
 
   import ExUnit.CaptureLog
 
-  alias PPNet.Message.ChunckedMessageBody
-  alias PPNet.Message.ChunckedMessageHeader
+  alias PPNet.Message.ChunkedMessageBody
+  alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -297,7 +297,7 @@ defmodule PPNetTest do
                decoded_chunk.transaction_id == decoded_header.transaction_id
              end)
 
-      assert PPNet.chuncked_to_message([decoded_header | decoded_chunks]) == {:ok, hello}
+      assert PPNet.chunked_to_message([decoded_header | decoded_chunks]) == {:ok, hello}
     end
   end
 
@@ -544,7 +544,7 @@ defmodule PPNetTest do
                decoded_chunk.transaction_id == decoded_header.transaction_id
              end)
 
-      assert PPNet.chuncked_to_message([decoded_header | decoded_chunks]) == {:ok, message}
+      assert PPNet.chunked_to_message([decoded_header | decoded_chunks]) == {:ok, message}
     end
   end
 
@@ -645,7 +645,7 @@ defmodule PPNetTest do
                decoded_chunk.transaction_id == decoded_header.transaction_id
              end)
 
-      assert PPNet.chuncked_to_message([decoded_header | decoded_chunks]) == {:ok, message}
+      assert PPNet.chunked_to_message([decoded_header | decoded_chunks]) == {:ok, message}
     end
   end
 
@@ -667,7 +667,7 @@ defmodule PPNetTest do
 
       assert %{
                messages: [
-                 %ChunckedMessageHeader{
+                 %ChunkedMessageHeader{
                    message_module: Image,
                    transaction_id: transaction_id,
                    datetime: %DateTime{},
@@ -683,7 +683,7 @@ defmodule PPNetTest do
         Enum.map(chunks, fn chunk ->
           assert %{
                    messages: [
-                     %ChunckedMessageBody{
+                     %ChunkedMessageBody{
                        transaction_id: ^transaction_id,
                        chunk_index: chunk_index,
                        chunk_size: chunk_size,
@@ -703,7 +703,7 @@ defmodule PPNetTest do
         end)
 
       assert {:ok, %Image{id: ^id, data: ^image, format: :webp}} =
-               PPNet.chuncked_to_message([decoded_header | decoded_chunks])
+               PPNet.chunked_to_message([decoded_header | decoded_chunks])
     end
 
     test "encode/1 with valid data without limit uses default limit of 254" do
@@ -717,7 +717,7 @@ defmodule PPNetTest do
       assert %{
                errors: [],
                messages: [
-                 %ChunckedMessageHeader{
+                 %ChunkedMessageHeader{
                    message_module: Image,
                    transaction_id: transaction_id,
                    total_chunks: 116
@@ -729,7 +729,7 @@ defmodule PPNetTest do
       assert length(chunks) == header.total_chunks
 
       assert Enum.all?(Enum.with_index(chunks), fn {chunk, index} ->
-               assert %ChunckedMessageBody{
+               assert %ChunkedMessageBody{
                         chunk_data: chunk_data,
                         chunk_size: chunk_size,
                         chunk_index: ^index,
@@ -741,7 +741,7 @@ defmodule PPNetTest do
              end)
 
       assert {:ok, %Image{data: ^image, format: :webp}} =
-               PPNet.chuncked_to_message([header | chunks])
+               PPNet.chunked_to_message([header | chunks])
     end
   end
 
@@ -751,7 +751,7 @@ defmodule PPNetTest do
 
       assert %{
                messages: [
-                 %ChunckedMessageHeader{
+                 %ChunkedMessageHeader{
                    message_module: Image,
                    transaction_id: transaction_id,
                    total_chunks: 150,
@@ -767,7 +767,7 @@ defmodule PPNetTest do
                |> PPNet.parse()
 
       assert Enum.all?(chunks, fn chunk ->
-               %ChunckedMessageBody{
+               %ChunkedMessageBody{
                  chunk_data: chunk_data,
                  chunk_size: chunk_size,
                  chunk_index: chunk_index,
@@ -883,7 +883,7 @@ defmodule PPNetTest do
              } = PPNet.parse(messages)
 
       assert [
-               %ChunckedMessageHeader{
+               %ChunkedMessageHeader{
                  message_module: Image,
                  transaction_id: transaction_id,
                  total_chunks: total_chunks
@@ -910,7 +910,7 @@ defmodule PPNetTest do
       {chunks, rest_3} = Enum.split(rest_2, total_chunks)
 
       assert Enum.all?(Enum.with_index(chunks), fn {chunk, index} ->
-               assert %ChunckedMessageBody{
+               assert %ChunkedMessageBody{
                         chunk_data: _chunk_data,
                         chunk_size: _chunk_size,
                         chunk_index: ^index,
