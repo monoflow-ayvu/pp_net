@@ -13,7 +13,8 @@ defmodule PpNet.MixProject do
       deps: deps(),
       aliases: aliases(),
       package: package(),
-      test_coverage: [tool: ExCoveralls]
+      test_coverage: [tool: ExCoveralls],
+      dialyzer: [ignore_warnings: "dialyzer_ignore_warnings.exs"]
     ]
   end
 
