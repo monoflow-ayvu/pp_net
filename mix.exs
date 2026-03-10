@@ -13,15 +13,7 @@ defmodule PpNet.MixProject do
       deps: deps(),
       aliases: aliases(),
       package: package(),
-      test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        "coveralls.html": :test,
-        "coveralls.cobertura": :test
-      ],
-      dialyzer: [ignore_warnings: "dialyzer_ignore_warnings.exs"]
+      test_coverage: [tool: ExCoveralls]
     ]
   end
 
@@ -66,6 +58,18 @@ defmodule PpNet.MixProject do
       maintainers: ["JVMartyns", "Fernando Mumbach"],
       description: "Message protocol with error correction (Reed-Solomon) and framing (COBS)"
     }
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test,
+        "coveralls.cobertura": :test
+      ]
+    ]
   end
 
   def docs do
