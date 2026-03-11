@@ -54,6 +54,7 @@ defmodule PpNet.MixProject do
 
   defp package do
     %{
+      organization: "monoflow-ayvu",
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
       maintainers: ["JVMartyns", "Fernando Mumbach"],
