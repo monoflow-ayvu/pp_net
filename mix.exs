@@ -2,7 +2,7 @@ defmodule PpNet.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/monoflow-ayvu/pp_net"
-  @version "0.1.0"
+  @version "0.1.1"
 
   def project do
     [
@@ -54,7 +54,7 @@ defmodule PpNet.MixProject do
 
   defp package do
     %{
-      organization: "monoflow-ayvu",
+      organization: "monoflow",
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
       maintainers: ["JVMartyns", "Fernando Mumbach"],
