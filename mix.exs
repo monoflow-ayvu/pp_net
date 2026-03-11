@@ -14,7 +14,8 @@ defmodule PpNet.MixProject do
       aliases: aliases(),
       package: package(),
       test_coverage: [tool: ExCoveralls],
-      dialyzer: [ignore_warnings: "dialyzer_ignore_warnings.exs"]
+      dialyzer: [ignore_warnings: "dialyzer_ignore_warnings.exs"],
+      organization: "monoflow"
     ]
   end
 
@@ -54,7 +55,6 @@ defmodule PpNet.MixProject do
 
   defp package do
     %{
-      organization: "monoflow",
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
       maintainers: ["JVMartyns", "Fernando Mumbach"],
