@@ -26,7 +26,7 @@ jobs:
           version-type: strict
 
       - name: Restore the deps and _build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache
         env:
           OTP_VERSION: ${{ steps.beam.outputs.otp-version }}
