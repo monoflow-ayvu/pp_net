@@ -14,13 +14,6 @@ defmodule PpNet.MixProject do
       aliases: aliases(),
       package: package(),
       test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        "coveralls.html": :test,
-        "coveralls.cobertura": :test
-      ],
       dialyzer: [ignore_warnings: "dialyzer_ignore_warnings.exs"]
     ]
   end
@@ -61,11 +54,24 @@ defmodule PpNet.MixProject do
 
   defp package do
     %{
+      organization: "monoflow-ayvu",
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
       maintainers: ["JVMartyns", "Fernando Mumbach"],
       description: "Message protocol with error correction (Reed-Solomon) and framing (COBS)"
     }
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test,
+        "coveralls.cobertura": :test
+      ]
+    ]
   end
 
   def docs do
