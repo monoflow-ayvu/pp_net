@@ -1,6 +1,6 @@
 # PpNet
 
-Message protocol with error correction (Reed-Solomon) and framing (COBS) for the Pagy Plus stack.
+Message protocol with error correction (Reed-Solomon) and framing (COBS).
 
 ## Installation
 
@@ -90,19 +90,19 @@ Body: MessagePack array.
 
 ### Type 3 — Ping
 
-Body: MessagePack array. **Minimum format:** `[temperature, uptime_ms]` (2 elements). **Full format:** 9 elements in order:
+Body: MessagePack array with 9 elements in order:
 
-| Field              | Type    | Wire format / notes                                                              |
-| ------------------ | ------- | -------------------------------------------------------------------------------- |
-| temperature        | float   | —                                                                                |
-| uptime_ms          | integer | —                                                                                |
-| location           | map     | `[lat, lon, accuracy]` (3 elements: float, float, integer)                       |
-| cpu                | float   | —                                                                                |
-| tpu_memory_percent | integer | % of TPU memory                                                                  |
-| tpu_ping_ms        | integer | TPU ping time (ms)                                                               |
-| wifi               | list    | List of **7-byte binaries**: 6 bytes MAC (raw) + 1 byte RSSI (signed int8, dBm). |
-| storage            | map     | `[total, used]` (2 integers, bytes)                                              |
-| extra              | map     | Optional key/value data                                                          |
+| Field              | Type    | Wire format / notes                                                                                       |
+| ------------------ | ------- | --------------------------------------------------------------------------------------------------------- |
+| temperature        | float   | —                                                                                                         |
+| uptime_ms          | integer | —                                                                                                         |
+| location           | list    | `[lat, lon, accuracy]` (3 elements: float, float, integer)                                                |
+| cpu                | float   | —                                                                                                         |
+| tpu_memory_percent | integer | % of TPU memory                                                                                           |
+| tpu_ping_ms        | integer | TPU ping time (ms)                                                                                        |
+| wifi               | list    | List of **7-byte binaries**: 6 bytes MAC (raw) + 1 byte RSSI (signed int8, dBm).                          |
+| storage            | list    | `[total, used]` (2 integers, kilobytes — clients must convert before sending; receivers always assume KB) |
+| extra              | map     | Optional key/value data                                                                                   |
 
 **WiFi encoding:** Each entry is 7 bytes: MAC address as 6 raw bytes (no colon-separated string), then RSSI as one signed byte. This keeps the payload small so the ping stays within a single frame.
 
@@ -137,14 +137,14 @@ When the encoded image (or any message) exceeds the channel limit, it is sent as
 
 Used when the payload is too large for a single frame (e.g. image). The body is fixed binary.
 
-| Field               | Type          | Bytes |
-| ------------------- | ------------- | ----- |
-| message_module_code | uint8         | 1     |
-| transaction_id      | uint32        | 4     |
-| datetime            | uint32 (Unix) | 4     |
-| total_chunks        | uint8         | 1     |
+| Field          | Type          | Bytes |
+| -------------- | ------------- | ----- |
+| message_module | uint8         | 1     |
+| transaction_id | uint32        | 4     |
+| datetime       | uint32 (Unix) | 4     |
+| total_chunks   | uint16        | 2     |
 
-`message_module_code` indicates the original message type (1=Hello, 2=SingleCounter, 3=Ping, 4=Event, 5=Image). Total header body: 10 bytes.
+`message_module_code` indicates the original message type (1=Hello, 2=SingleCounter, 3=Ping, 4=Event, 5=Image). Total header body: 11 bytes.
 
 ---
 
@@ -153,7 +153,7 @@ Used when the payload is too large for a single frame (e.g. image). The body is 
 | Field          | Type   | Bytes      |
 | -------------- | ------ | ---------- |
 | transaction_id | uint32 | 4          |
-| chunk_index    | uint8  | 1          |
+| chunk_index    | uint16 | 2          |
 | chunk_size     | uint8  | 1          |
 | chunk_data     | binary | chunk_size |
 
@@ -167,7 +167,7 @@ Used when the payload is too large for a single frame (e.g. image). The body is 
 
 - **Parse** a stream: `PPNet.parse(binary)` returns `%{messages: [...], errors: [...]}`. Each element of `messages` is either a decoded message struct (Hello, Ping, etc.) or a `ChunkedMessageHeader` / `ChunkedMessageBody`. Join all frames (e.g. from a stream) and call `parse` on the concatenated binary.
 
-- **Reassemble** chunked payloads: when you have `[%ChunkedMessageHeader{} | chunks]` from `parse`, call `PPNet.Chunked_to_message([header | chunks])` to get `{:ok, message}` (or `{:error, reason}`). The result is the original message type (e.g. `%Image{}`, `%Ping{}`).
+- **Reassemble** chunked payloads: when you have `[%ChunkedMessageHeader{} | chunks]` from `parse`, call `PPNet.chunked_to_message([header | chunks])` to get `{:ok, message}` (or `{:error, reason}`). The result is the original message type (e.g. `%Image{}`, `%Ping{}`).
 
 Example (chunked image):
 
@@ -176,5 +176,5 @@ image = %PPNet.Message.Image{data: raw_binary, format: :webp}
 [header_bin | chunk_bins] = PPNet.encode_message(image, limit: 200)
 payload = [header_bin | chunk_bins] |> Enum.join()
 %{messages: [header | body_messages], errors: []} = PPNet.parse(payload)
-{:ok, ^image} = PPNet.Chunked_to_message([header | body_messages])
+{:ok, ^image} = PPNet.chunked_to_message([header | body_messages])
 ```
