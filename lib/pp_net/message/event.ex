@@ -17,6 +17,15 @@ defmodule PPNet.Message.Event do
   @valid_event_kind_codes Map.values(@event_kind_to_code)
 
   typedstruct do
+    @typedoc """
+    The `PPNet.Message.Event` struct
+
+    ## Fields
+
+    * `kind` - The kind of event (`:detection`)
+    * `data` - Arbitrary key/value payload associated with the event
+    """
+
     field(:kind, event_kind(), enforce: true)
     field(:data, %{optional(String.t()) => any()}, enforce: true)
   end

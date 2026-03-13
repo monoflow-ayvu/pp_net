@@ -14,6 +14,8 @@ defmodule PPNetTest do
 
   require Logger
 
+  doctest PPNet
+
   defp corrupt_bytes(payload, positions) do
     payload
     |> :binary.bin_to_list()
