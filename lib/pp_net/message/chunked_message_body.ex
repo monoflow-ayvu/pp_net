@@ -13,6 +13,17 @@ defmodule PPNet.Message.ChunkedMessageBody do
   @derive Jason.Encoder
 
   typedstruct do
+    @typedoc """
+    The `PPNet.Message.ChunkedMessageBody` struct
+
+    ## Fields
+
+    * `transaction_id` - Matches the `transaction_id` from the corresponding `ChunkedMessageHeader`
+    * `chunk_index` - Zero-based index of this chunk within the full message
+    * `chunk_size` - Size in bytes of `chunk_data`
+    * `chunk_data` - Raw binary fragment of the original message
+    """
+
     field(:transaction_id, non_neg_integer(), enforce: true)
     field(:chunk_index, non_neg_integer(), enforce: true)
     field(:chunk_size, non_neg_integer(), enforce: true)

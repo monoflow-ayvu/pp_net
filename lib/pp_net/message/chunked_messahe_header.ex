@@ -24,6 +24,17 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   @image_type_code 5
 
   typedstruct do
+    @typedoc """
+    The `PPNet.Message.ChunkedMessageHeader` struct
+
+    ## Fields
+
+    * `message_module` - The module of the original message being chunked
+    * `transaction_id` - Unique ID grouping all chunks of the same message
+    * `datetime` - Timestamp of when the message was sent
+    * `total_chunks` - Total number of chunks the message was split into
+    """
+
     field(:message_module, module(), enforce: true)
     field(:transaction_id, non_neg_integer(), enforce: true)
     field(:datetime, DateTime.t(), enforce: true)
