@@ -37,6 +37,7 @@ defmodule PPNet.Message.ChunkedMessageBody do
   def type_code, do: @type_code
 
   @impl true
+  # credo:disable-for-lines:8
   def pack(%__MODULE__{
         transaction_id: transaction_id,
         chunk_index: chunk_index,
