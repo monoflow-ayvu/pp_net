@@ -2,8 +2,7 @@ defmodule PPNet do
   @moduledoc """
   Message protocol with error correction (Reed-Solomon) and framing (COBS).
 
-  This module defines the `PPNet` module, which provides functions to parse
-  a binary or list representation of a message into a struct.
+  For the full protocol specification, see the [README](readme.html).
 
   ## Encoding
 

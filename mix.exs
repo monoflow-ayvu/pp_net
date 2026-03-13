@@ -15,7 +15,8 @@ defmodule PpNet.MixProject do
       package: package(),
       test_coverage: [tool: ExCoveralls],
       dialyzer: [ignore_warnings: "dialyzer_ignore_warnings.exs"],
-      organization: "monoflow"
+      organization: "monoflow",
+      docs: docs()
     ]
   end
 
@@ -79,8 +80,8 @@ defmodule PpNet.MixProject do
       name: "PPNet",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      main: "readme",
-      extras: ["README.md", "LICENSE"]
+      main: "PPNet",
+      extras: [{"README.md", [title: "README"]}, "LICENSE"]
     ]
   end
 end

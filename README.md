@@ -1,4 +1,8 @@
-# PpNet
+# PPNet
+
+[![Hex.pm](https://img.shields.io/hexpm/v/pp_net.svg)](https://hex.pm/packages/pp_net)
+[![Hex Docs](https://img.shields.io/badge/docs-hexdocs-blue.svg)](https://hexdocs.pm/pp_net)
+[![License](https://img.shields.io/hexpm/l/pp_net.svg)](https://github.com/monoflow-ayvu/pp_net/blob/main/LICENCE)
 
 Message protocol with error correction (Reed-Solomon) and framing (COBS).
 
