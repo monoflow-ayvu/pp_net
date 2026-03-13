@@ -19,6 +19,16 @@ defmodule PPNet.Message.Image do
   @type uuidv4 :: String.t()
 
   typedstruct do
+    @typedoc """
+    The `PPNet.Message.Image` struct
+
+    ## Fields
+
+    * `id` - UUIDv4 identifying the image
+    * `format` - Image format (`:jpeg`, `:webp`, or `:png`)
+    * `data` - Raw image binary
+    """
+
     field(:id, uuidv4(), enforce: true)
     field(:format, format(), enforce: true)
     field(:data, binary(), enforce: true)
