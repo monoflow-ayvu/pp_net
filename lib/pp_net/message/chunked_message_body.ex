@@ -44,7 +44,8 @@ defmodule PPNet.Message.ChunkedMessageBody do
         chunk_data: chunk_data
       })
       when is_integer(transaction_id) and transaction_id >= 0 and transaction_id <= @max_transaction_id and
-             is_integer(chunk_index) and chunk_index >= 0 and chunk_index <= @max_chunk_index and is_integer(chunk_size) and is_binary(chunk_data) do
+             is_integer(chunk_index) and chunk_index >= 0 and chunk_index <= @max_chunk_index and is_integer(chunk_size) and
+             is_binary(chunk_data) do
     <<
       transaction_id::unsigned-integer-size(4)-unit(8),
       chunk_index::unsigned-integer-size(2)-unit(8),
