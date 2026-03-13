@@ -10,60 +10,84 @@ defmodule PPNet do
   When the message exceeds the frame limit (default 254 bytes), it is automatically
   split into chunks and a list `[header_binary | chunk_binaries]` is returned.
 
-      binary = PPNet.encode_message(%PPNet.Message.Hello{
-        unique_id: "TestRunner",
-        board_identifier: "Tester",
-        version: 4660,
-        board_version: 17_185,
-        boot_id: 87_372_886,
-        ppnet_version: 1
-      })
+      iex> %PPNet.Message.Hello{
+      ...>   unique_id: "TestRunner",
+      ...>   board_identifier: "Tester",
+      ...>   version: 4660,
+      ...>   board_version: 17_185,
+      ...>   boot_id: 87_372_886,
+      ...>   ppnet_version: 1
+      ...> } |> PPNet.encode_message()
+      <<41, 1, 150, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101,
+        115, 116, 101, 114, 205, 18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 1, 143, 165,
+        119, 204, 215, 155, 76, 244, 0>>
 
-      binary = PPNet.encode_message(%PPNet.Message.SingleCounter{
-        kind: "bar",
-        value: 42,
-        pulses: 0,
-        duration_ms: 1500
-      })
+      iex> %PPNet.Message.SingleCounter{
+      ...>   kind: "bar",
+      ...>   value: 42,
+      ...>   pulses: 0,
+      ...>   duration_ms: 1500
+      ...> } |> PPNet.encode_message()
+      <<8, 2, 148, 163, 98, 97, 114, 42, 12, 205, 5, 220, 232, 99, 255, 179, 77, 7, 33, 214, 0>>
 
-      binary = PPNet.encode_message(%PPNet.Message.Ping{
-        temperature: 25.0,
-        uptime_ms: 3_600_000,
-        location: %{lat: 40.7128, lon: -74.0060, accuracy: 10_000},
-        cpu: 0.5,
-        tpu_memory_percent: 50,
-        tpu_ping_ms: 100,
-        wifi: [%{mac: "00:1A:2B:3C:4D:5E", rssi: -42}],
-        storage: %{total: 512_000, used: 128_000}
-      })
+      iex> %PPNet.Message.Ping{
+      ...>   temperature: 25.0,
+      ...>   uptime_ms: 3_600_000,
+      ...>   location: %{lat: 40.7128, lon: -74.0060, accuracy: 10_000},
+      ...>   cpu: 0.5,
+      ...>   tpu_memory_percent: 50,
+      ...>   tpu_ping_ms: 100,
+      ...>   wifi: [%{mac: "00:1A:2B:3C:4D:5E", rssi: -42}],
+      ...>   storage: %{total: 512_000, used: 128_000}
+      ...> } |> PPNet.encode_message()
+      <<6, 3, 153, 203, 64, 57, 1, 1, 1, 1, 1, 2, 206, 29, 54, 238, 128, 147, 203, 64,
+        68, 91, 61, 7, 200, 75, 94, 203, 192, 82, 128, 98, 77, 210, 241, 170, 205, 39,
+        16, 203, 63, 224, 1, 1, 1, 1, 1, 5, 50, 100, 145, 167, 9, 26, 43, 60, 77, 94,
+        214, 146, 206, 3, 7, 208, 2, 206, 3, 1, 244, 10, 128, 91, 125, 11, 67, 136,
+        158, 177, 158, 0>>
 
-      # Event — single frame
-      binary = PPNet.encode_message(%PPNet.Message.Event{
-        kind: :detection,
-        data: %{"sensor_id" => 1, "value" => 100}
-      })
+      iex> %PPNet.Message.Event{
+      ...>   kind: :detection,
+      ...>   data: %{"sensor_id" => 1, "value" => 100}
+      ...> } |> PPNet.encode_message()
+      <<31, 4, 146, 1, 130, 165, 118, 97, 108, 117, 101, 100, 169, 115, 101, 110, 115,
+        111, 114, 95, 105, 100, 1, 132, 127, 245, 70, 100, 161, 64, 158, 0>>
 
-      # Event — chunked when data is large
-      [header_bin | chunk_bins] = PPNet.encode_message(%PPNet.Message.Event{
-        kind: :detection,
-        data: %{"image_id" => image_id, "d" => detections}
-      })
+  Event can also be chunked when the data payload is large:
 
-      # Image — usually large enough to be chunked
-      [header_bin | chunk_bins] = PPNet.encode_message(%PPNet.Message.Image{
-        id: UUID.uuid4(),
-        data: raw_binary,
-        format: :webp
-      })
+      # [header_bin | chunk_bins] = PPNet.encode_message(%PPNet.Message.Event{
+      #   kind: :detection,
+      #   data: %{"image_id" => image_id, "d" => detections}
+      # })
+
+  Image is usually large enough to be chunked:
+
+      iex> image_data = File.read!("test/support/static/image.webp")
+      iex> image = %PPNet.Message.Image{
+      ...>   id: "00000000-0000-0000-0000-000000000000",
+      ...>   data: image_data,
+      ...>   format: :webp
+      ...> }
+      iex> [header_bin | chunks_bin] = PPNet.encode_message(image)
+      iex> %{messages: [header | chunks], errors: []} = PPNet.parse([header_bin | chunks_bin])
+      iex> PPNet.chunked_to_message([header | chunks])
+      {:ok, %PPNet.Message.Image{id: "00000000-0000-0000-0000-000000000000", format: :webp, data: image_data}}
+
 
   The optional `limit` parameter controls the maximum frame size in bytes (default 254).
   Use it to produce smaller chunks when the channel has tighter constraints:
 
-      [header_bin | chunk_bins] = PPNet.encode_message(%PPNet.Message.Image{
-        id: UUID.uuid4(),
-        data: raw_binary,
-        format: :webp
-      }, limit: 100)
+      iex> image_data = File.read!("test/support/static/image.webp")
+      iex> [_header | chunks] = PPNet.encode_message(
+      ...>   %PPNet.Message.Image{
+      ...>     id: "00000000-0000-0000-0000-000000000000",
+      ...>     data: image_data,
+      ...>     format: :webp
+      ...>   },
+      ...>   limit: 100
+      ...> )
+      iex> Enum.all?(chunks, &(byte_size(&1) <= 100))
+      true
 
   ## Parsing
 
@@ -74,35 +98,40 @@ defmodule PPNet do
   after each frame, allowing multiple messages to be concatenated in a stream and reliably
   separated on the receiver side. `parse/1` splits on `0x00` and decodes each frame automatically.
 
+  Every binary returned by `encode_message/2` — including each chunk in a chunked message —
+  already includes the `0x00` delimiter at the end. Concatenating them with `Enum.join/1` is
+  therefore sufficient; no extra separator is needed.
+
   Before parsing the message body, each frame is passed through **Reed-Solomon** error correction
   (8 parity bytes), which can transparently recover up to 4 corrupted bytes per frame. When
   corrections are made, a warning is logged. If corruption exceeds 4 bytes, the frame is
   discarded and an error is added to the result — but the remaining frames in the stream are
   still processed normally. Errors never interrupt the parsing of other messages.
 
-      # Single message
-      %{messages: [%PPNet.Message.Hello{unique_id: "TestRunner"}], errors: []} =
-        PPNet.parse(binary)
+      iex> hello = %PPNet.Message.Hello{
+      ...>   unique_id: "TestRunner",
+      ...>   board_identifier: "Tester",
+      ...>   version: 4660,
+      ...>   board_version: 17_185,
+      ...>   boot_id: 87_372_886,
+      ...>   ppnet_version: 1
+      ...> }
+      iex> hello |> PPNet.encode_message() |> PPNet.parse() |> Map.get(:messages) |> hd() == hello
+      true
 
-      # Multiple messages concatenated in a stream
-      %{messages: [%PPNet.Message.Ping{}, %PPNet.Message.SingleCounter{}], errors: []} =
-        PPNet.parse(stream_binary)
+  Reed-Solomon corrects up to 4 corrupted bytes transparently — a warning is logged when
+  corrections are made. If corruption exceeds 4 bytes, the frame is discarded and an error
+  is returned, but remaining frames in the stream are still processed normally:
 
-      # Reed-Solomon corrects up to 4 corrupted bytes transparently
-      %{messages: [%PPNet.Message.Hello{}], errors: []} = PPNet.parse(corrupted_binary)
-      # A warning is logged: "Reed-Solomon corrected N errors in message of type ..."
+      # %{
+      #   messages: [%PPNet.Message.Ping{}],
+      #   errors: [%PPNet.ParseError{reason: {:reed_solomon, "decode_failed"}}]
+      # } = PPNet.parse(stream_with_one_bad_frame)
 
-      # More than 4 corrupted bytes — frame is discarded, other frames are unaffected
-      %{
-        messages: [%PPNet.Message.Ping{}],
-        errors: [%PPNet.ParseError{reason: {:reed_solomon, "decode_failed"}}]
-      } = PPNet.parse(stream_with_one_bad_frame)
-
-      # Unknown or malformed frame
-      %{
-        messages: [],
-        errors: [%PPNet.ParseError{reason: {:cobs, "Offset byte specifies more bytes than available"}}]
-      } = PPNet.parse(garbage_binary)
+      # %{
+      #   messages: [],
+      #   errors: [%PPNet.ParseError{reason: {:cobs, "Offset byte specifies more bytes than available"}}]
+      # } = PPNet.parse(garbage_binary)
 
   ### `PPNet.ParseError`
 
@@ -115,8 +144,9 @@ defmodule PPNet do
   ## Limitations
 
   * Maximum frame size: **254 bytes** (COBS limit). Larger messages are automatically chunked.
+  * Minimum chunk size: **17 bytes** — the encoded size of a `ChunkedMessageHeader` frame. Going
+    below this would cause the header itself to be chunked, which is not supported.
   * Reed-Solomon can correct up to **4 corrupted bytes** per frame (8 parity bytes, GF(2⁸)).
-  * Minimum chunk size: **17 bytes** (size of the `ChunkedMessageHeader` frame).
 
   ## Reassembling chunked messages
 
@@ -188,8 +218,9 @@ defmodule PPNet do
 
   ## Options
 
-  * `:limit` - Maximum frame size in bytes. Defaults to 254. Values above 254 are clamped
-    to 254; values below 17 (minimum chunk size) are clamped to 17.
+  * `:limit` - Maximum frame size in bytes. Defaults to 254. Clamped to the range `17..254`.
+    The minimum of 17 matches the encoded size of a `ChunkedMessageHeader` frame — going below
+    that would cause the header itself to be chunked. 254 is the COBS limit.
   """
   def encode_message(%module{} = message, opts \\ []) do
     limit = get_limit(opts)

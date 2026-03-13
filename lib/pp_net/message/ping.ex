@@ -21,9 +21,9 @@ defmodule PPNet.Message.Ping do
 
     * `temperature` - CPU/board temperature in Celsius
     * `uptime_ms` - Device uptime in milliseconds
-    * `location` - GPS location with `lat`, `lon` (floats) and `accuracy` (integer, meters)
+    * `location` - GPS location in WGS 84 (EPSG:4326): `lat` and `lon` in decimal degrees, `accuracy` in meters
     * `cpu` - CPU usage as a float between 0.0 and 1.0
-    * `tpu_memory_percent` - TPU memory usage percentage
+    * `tpu_memory_percent` - TPU memory usage percentage (0-100)
     * `tpu_ping_ms` - TPU round-trip ping time in milliseconds
     * `wifi` - List of visible WiFi networks, each with `mac` (string) and `rssi` (integer, dBm)
     * `storage` - Disk usage in kilobytes (KB): `total` and `used`
@@ -40,8 +40,6 @@ defmodule PPNet.Message.Ping do
     field(:tpu_memory_percent, integer(), enforce: true)
     field(:tpu_ping_ms, integer(), enforce: true)
     field(:wifi, list(%{required(:mac) => String.t(), required(:rssi) => integer()}), default: [])
-    # Storage values MUST be in kilobytes (KB) to avoid ambiguity across devices.
-    # Clients convert before sending; receivers always assume KB.
     field(:storage, %{required(:total) => integer(), required(:used) => integer()}, enforce: true)
     field(:extra, %{optional(String.t()) => any()}, default: %{})
   end
