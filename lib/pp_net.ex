@@ -1,7 +1,147 @@
 defmodule PPNet do
   @moduledoc """
+  Message protocol with error correction (Reed-Solomon) and framing (COBS).
+
   This module defines the `PPNet` module, which provides functions to parse
   a binary or list representation of a message into a struct.
+
+  ## Encoding
+
+  `encode_message/2` encodes a message struct into a binary frame ready to be sent.
+  When the message exceeds the frame limit (default 254 bytes), it is automatically
+  split into chunks and a list `[header_binary | chunk_binaries]` is returned.
+
+      binary = PPNet.encode_message(%PPNet.Message.Hello{
+        unique_id: "TestRunner",
+        board_identifier: "Tester",
+        version: 4660,
+        board_version: 17_185,
+        boot_id: 87_372_886,
+        ppnet_version: 1
+      })
+
+      binary = PPNet.encode_message(%PPNet.Message.SingleCounter{
+        kind: "bar",
+        value: 42,
+        pulses: 0,
+        duration_ms: 1500
+      })
+
+      binary = PPNet.encode_message(%PPNet.Message.Ping{
+        temperature: 25.0,
+        uptime_ms: 3_600_000,
+        location: %{lat: 40.7128, lon: -74.0060, accuracy: 10_000},
+        cpu: 0.5,
+        tpu_memory_percent: 50,
+        tpu_ping_ms: 100,
+        wifi: [%{mac: "00:1A:2B:3C:4D:5E", rssi: -42}],
+        storage: %{total: 512_000, used: 128_000}
+      })
+
+      # Event — single frame
+      binary = PPNet.encode_message(%PPNet.Message.Event{
+        kind: :detection,
+        data: %{"sensor_id" => 1, "value" => 100}
+      })
+
+      # Event — chunked when data is large
+      [header_bin | chunk_bins] = PPNet.encode_message(%PPNet.Message.Event{
+        kind: :detection,
+        data: %{"image_id" => image_id, "d" => detections}
+      })
+
+      # Image — usually large enough to be chunked
+      [header_bin | chunk_bins] = PPNet.encode_message(%PPNet.Message.Image{
+        id: UUID.uuid4(),
+        data: raw_binary,
+        format: :webp
+      })
+
+  The optional `limit` parameter controls the maximum frame size in bytes (default 254).
+  Use it to produce smaller chunks when the channel has tighter constraints:
+
+      [header_bin | chunk_bins] = PPNet.encode_message(%PPNet.Message.Image{
+        id: UUID.uuid4(),
+        data: raw_binary,
+        format: :webp
+      }, limit: 100)
+
+  ## Parsing
+
+  `parse/1` accepts a binary or iodata and returns `%{messages: [...], errors: [...]}`.
+
+  Each encoded message is wrapped with **COBS** (_Consistent Overhead Byte Stuffing_), which
+  escapes the payload so it never contains the byte `0x00`. A `0x00` delimiter is then appended
+  after each frame, allowing multiple messages to be concatenated in a stream and reliably
+  separated on the receiver side. `parse/1` splits on `0x00` and decodes each frame automatically.
+
+  Before parsing the message body, each frame is passed through **Reed-Solomon** error correction
+  (8 parity bytes), which can transparently recover up to 4 corrupted bytes per frame. When
+  corrections are made, a warning is logged. If corruption exceeds 4 bytes, the frame is
+  discarded and an error is added to the result — but the remaining frames in the stream are
+  still processed normally. Errors never interrupt the parsing of other messages.
+
+      # Single message
+      %{messages: [%PPNet.Message.Hello{unique_id: "TestRunner"}], errors: []} =
+        PPNet.parse(binary)
+
+      # Multiple messages concatenated in a stream
+      %{messages: [%PPNet.Message.Ping{}, %PPNet.Message.SingleCounter{}], errors: []} =
+        PPNet.parse(stream_binary)
+
+      # Reed-Solomon corrects up to 4 corrupted bytes transparently
+      %{messages: [%PPNet.Message.Hello{}], errors: []} = PPNet.parse(corrupted_binary)
+      # A warning is logged: "Reed-Solomon corrected N errors in message of type ..."
+
+      # More than 4 corrupted bytes — frame is discarded, other frames are unaffected
+      %{
+        messages: [%PPNet.Message.Ping{}],
+        errors: [%PPNet.ParseError{reason: {:reed_solomon, "decode_failed"}}]
+      } = PPNet.parse(stream_with_one_bad_frame)
+
+      # Unknown or malformed frame
+      %{
+        messages: [],
+        errors: [%PPNet.ParseError{reason: {:cobs, "Offset byte specifies more bytes than available"}}]
+      } = PPNet.parse(garbage_binary)
+
+  ### `PPNet.ParseError`
+
+  Errors are returned as `%PPNet.ParseError{}` structs with the following fields:
+
+  * `message` - Human-readable description of the error
+  * `reason` - Machine-readable reason, e.g. `{:reed_solomon, "decode_failed"}`, `{:cobs, reason}`, `:unknown_format`, `:unknown_type`
+  * `data` - Raw data associated with the failure, useful for debugging
+
+  ## Limitations
+
+  * Maximum frame size: **254 bytes** (COBS limit). Larger messages are automatically chunked.
+  * Reed-Solomon can correct up to **4 corrupted bytes** per frame (8 parity bytes, GF(2⁸)).
+  * Minimum chunk size: **17 bytes** (size of the `ChunkedMessageHeader` frame).
+
+  ## Reassembling chunked messages
+
+  After parsing a stream that contains chunked frames, use `chunked_to_message/1`
+  to reassemble the original message:
+
+      payload = Enum.join([header_bin | chunk_bins])
+
+      %{messages: [header | chunks], errors: []} = PPNet.parse(payload)
+
+      {:ok, %PPNet.Message.Image{data: ^raw_binary, format: :webp}} =
+        PPNet.chunked_to_message([header | chunks])
+
+  ## Message types
+
+  | Type | Module                              |
+  |------|-------------------------------------|
+  | 1    | `PPNet.Message.Hello`               |
+  | 2    | `PPNet.Message.SingleCounter`       |
+  | 3    | `PPNet.Message.Ping`                |
+  | 4    | `PPNet.Message.Event`               |
+  | 5    | `PPNet.Message.Image`               |
+  | 6    | `PPNet.Message.ChunkedMessageHeader`|
+  | 7    | `PPNet.Message.ChunkedMessageBody`  |
   """
   alias PPNet.Message.ChunkedMessageBody
   alias PPNet.Message.ChunkedMessageHeader
@@ -40,6 +180,18 @@ defmodule PPNet do
     @chunked_message_body_type_code
   ]
 
+  @doc """
+  Encodes a message struct into a COBS-framed, Reed-Solomon-protected binary.
+
+  Returns a single binary when the message fits within `limit` bytes (default 254),
+  or a list `[header_binary | chunk_binaries]` when the message is too large and must
+  be split into chunks.
+
+  ## Options
+
+  * `:limit` - Maximum frame size in bytes. Defaults to 254. Values above 254 are clamped
+    to 254; values below 17 (minimum chunk size) are clamped to 17.
+  """
   def encode_message(%module{} = message, opts \\ []) do
     limit = get_limit(opts)
 
@@ -103,9 +255,13 @@ defmodule PPNet do
   end
 
   @doc """
-  Parses a binary or list representation of a message into a struct.
-  """
+  Parses a binary or iodata stream of COBS-framed messages.
 
+  Splits the input on `0x00` delimiters, decodes each frame with COBS, applies
+  Reed-Solomon error correction, and parses the message body. Returns a map with
+  `:messages` and `:errors`. Failed frames are added to `:errors` without
+  interrupting the processing of other frames.
+  """
   def parse(data) when is_list(data), do: parse(IO.iodata_to_binary(data))
 
   # credo:disable-for-next-line
@@ -164,6 +320,13 @@ defmodule PPNet do
       {:error, build_error(data, {:reed_solomon, error})}
   end
 
+  @doc """
+  Reassembles a chunked message from a `ChunkedMessageHeader` and its `ChunkedMessageBody` fragments.
+
+  Expects a list starting with a `%ChunkedMessageHeader{}` followed by all corresponding
+  `%ChunkedMessageBody{}` chunks. Fragments are sorted by `chunk_index` before reassembly.
+  Returns `{:ok, message}` or `{:error, reason}`.
+  """
   def chunked_to_message([
         %ChunkedMessageHeader{
           message_module: message_module,
