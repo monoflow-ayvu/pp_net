@@ -12,6 +12,9 @@ defmodule PPNet.Message.ChunkedMessageBody do
   @type_code 7
   @derive Jason.Encoder
 
+  @max_transaction_id 2 ** 32 - 1
+  @max_chunk_index 2 ** 16 - 1
+
   typedstruct do
     @typedoc """
     The `PPNet.Message.ChunkedMessageBody` struct
@@ -34,12 +37,19 @@ defmodule PPNet.Message.ChunkedMessageBody do
   def type_code, do: @type_code
 
   @impl true
-  def pack(%__MODULE__{} = body) do
+  def pack(%__MODULE__{
+        transaction_id: transaction_id,
+        chunk_index: chunk_index,
+        chunk_size: chunk_size,
+        chunk_data: chunk_data
+      })
+      when is_integer(transaction_id) and transaction_id >= 0 and transaction_id <= @max_transaction_id and
+             is_integer(chunk_index) and chunk_index >= 0 and chunk_index <= @max_chunk_index and is_integer(chunk_size) and is_binary(chunk_data) do
     <<
-      body.transaction_id::unsigned-integer-size(4)-unit(8),
-      body.chunk_index::unsigned-integer-size(2)-unit(8),
-      body.chunk_size::unsigned-integer-size(1)-unit(8),
-      body.chunk_data::binary-size(body.chunk_size)-unit(8)
+      transaction_id::unsigned-integer-size(4)-unit(8),
+      chunk_index::unsigned-integer-size(2)-unit(8),
+      chunk_size::unsigned-integer-size(1)-unit(8),
+      chunk_data::binary-size(chunk_size)-unit(8)
     >>
   end
 

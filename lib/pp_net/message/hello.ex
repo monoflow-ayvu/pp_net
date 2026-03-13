@@ -39,15 +39,24 @@ defmodule PPNet.Message.Hello do
   def type_code, do: @type_code
 
   @impl true
-  def pack(%__MODULE__{} = message) do
+  def pack(%__MODULE__{
+        unique_id: unique_id,
+        board_identifier: board_identifier,
+        version: version,
+        board_version: board_version,
+        boot_id: boot_id,
+        ppnet_version: ppnet_version
+      })
+      when is_binary(unique_id) and is_binary(board_identifier) and is_integer(version) and is_integer(board_version) and
+             is_integer(boot_id) and is_integer(ppnet_version) do
     Msgpax.pack!(
       [
-        message.unique_id,
-        message.board_identifier,
-        message.version,
-        message.board_version,
-        message.boot_id,
-        message.ppnet_version
+        unique_id,
+        board_identifier,
+        version,
+        board_version,
+        boot_id,
+        ppnet_version
       ],
       iodata: false
     )

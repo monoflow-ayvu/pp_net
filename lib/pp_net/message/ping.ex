@@ -48,18 +48,32 @@ defmodule PPNet.Message.Ping do
   def type_code, do: @type_code
 
   @impl true
-  def pack(%__MODULE__{} = message) do
+  def pack(%__MODULE__{
+        temperature: temperature,
+        uptime_ms: uptime_ms,
+        location: %{lat: lat, lon: lon, accuracy: accuracy} = location,
+        cpu: cpu,
+        tpu_memory_percent: tpu_memory_percent,
+        tpu_ping_ms: tpu_ping_ms,
+        wifi: wifi,
+        storage: %{total: total, used: used} = storage,
+        extra: extra
+      })
+      when is_float(temperature) and is_integer(uptime_ms) and is_float(lat) and is_float(lon) and is_integer(accuracy) and
+             is_float(cpu) and cpu >= 0.0 and cpu <= 1.0 and is_integer(tpu_memory_percent) and tpu_memory_percent >= 0 and
+             tpu_memory_percent <= 100 and is_integer(tpu_ping_ms) and is_list(wifi) and is_integer(total) and
+             is_integer(used) and is_map(extra) do
     Msgpax.pack!(
       [
-        message.temperature,
-        message.uptime_ms,
-        pack_location(message.location),
-        message.cpu,
-        message.tpu_memory_percent,
-        message.tpu_ping_ms,
-        pack_wifi(message.wifi),
-        pack_storage(message.storage),
-        message.extra
+        temperature,
+        uptime_ms,
+        pack_location(location),
+        cpu,
+        tpu_memory_percent,
+        tpu_ping_ms,
+        pack_wifi(wifi),
+        pack_storage(storage),
+        extra
       ],
       iodata: false
     )

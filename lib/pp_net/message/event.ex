@@ -15,6 +15,7 @@ defmodule PPNet.Message.Event do
   @event_kind_to_code %{detection: 1}
   @code_to_event_kind Map.new(@event_kind_to_code, fn {k, v} -> {v, k} end)
   @valid_event_kind_codes Map.values(@event_kind_to_code)
+  @valid_event_kinds Map.keys(@event_kind_to_code)
 
   typedstruct do
     @typedoc """
@@ -34,9 +35,9 @@ defmodule PPNet.Message.Event do
   def type_code, do: @type_code
 
   @impl true
-  def pack(%__MODULE__{} = event) do
+  def pack(%__MODULE__{kind: kind, data: data}) when kind in @valid_event_kinds and is_map(data) do
     Msgpax.pack!(
-      [@event_kind_to_code[event.kind], event.data],
+      [@event_kind_to_code[kind], data],
       iodata: false
     )
   end

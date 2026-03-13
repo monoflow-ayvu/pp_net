@@ -15,7 +15,7 @@ defmodule PPNet.Message.Image do
   @type format :: :jpeg | :webp | :png
   @format_to_code %{jpeg: 1, webp: 2, png: 3}
   @code_to_format Map.new(@format_to_code, fn {k, v} -> {v, k} end)
-
+  @valid_formats Map.keys(@format_to_code)
   @type uuidv4 :: String.t()
 
   typedstruct do
@@ -38,11 +38,12 @@ defmodule PPNet.Message.Image do
   def type_code, do: @type_code
 
   @impl true
-  def pack(%__MODULE__{} = message) do
+  def pack(%__MODULE__{id: id, format: format, data: data})
+      when is_binary(id) and format in @valid_formats and is_binary(data) do
     <<
-      UUID.string_to_binary!(message.id)::binary-size(16)-unit(8),
-      @format_to_code[message.format]::unsigned-integer-size(1)-unit(8),
-      message.data::binary-size(byte_size(message.data))-unit(8)
+      UUID.string_to_binary!(id)::binary-size(16)-unit(8),
+      @format_to_code[format]::unsigned-integer-size(1)-unit(8),
+      data::binary-size(byte_size(data))-unit(8)
     >>
   end
 
