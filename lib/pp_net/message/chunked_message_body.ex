@@ -15,6 +15,13 @@ defmodule PPNet.Message.ChunkedMessageBody do
   @max_transaction_id 2 ** 32 - 1
   @max_chunk_index 2 ** 16 - 1
 
+  defguard is_transaction_id_valid(transaction_id)
+           when is_integer(transaction_id) and transaction_id >= 0 and transaction_id <= @max_transaction_id
+
+  defguard is_chunk_index_valid(chunk_index)
+           when is_integer(chunk_index) and chunk_index >= 0 and
+                  chunk_index <= @max_chunk_index
+
   typedstruct do
     @typedoc """
     The `PPNet.Message.ChunkedMessageBody` struct
@@ -37,15 +44,13 @@ defmodule PPNet.Message.ChunkedMessageBody do
   def type_code, do: @type_code
 
   @impl true
-  # credo:disable-for-lines:8
   def pack(%__MODULE__{
         transaction_id: transaction_id,
         chunk_index: chunk_index,
         chunk_size: chunk_size,
         chunk_data: chunk_data
       })
-      when is_integer(transaction_id) and transaction_id >= 0 and transaction_id <= @max_transaction_id and
-             is_integer(chunk_index) and chunk_index >= 0 and chunk_index <= @max_chunk_index and is_integer(chunk_size) and
+      when is_transaction_id_valid(transaction_id) and is_chunk_index_valid(chunk_index) and is_integer(chunk_size) and
              is_binary(chunk_data) do
     <<
       transaction_id::unsigned-integer-size(4)-unit(8),

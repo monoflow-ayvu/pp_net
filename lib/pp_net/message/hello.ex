@@ -13,6 +13,11 @@ defmodule PPNet.Message.Hello do
   @derive Jason.Encoder
   @type_code 1
 
+  defguard is_valid_types(unique_id, board_identifier, version, board_version, boot_id, ppnet_version)
+           when is_binary(unique_id) and is_binary(board_identifier) and is_integer(version) and
+                  is_integer(board_version) and
+                  is_integer(boot_id) and is_integer(ppnet_version)
+
   typedstruct do
     @typedoc """
     The `PPNet.Message.Hello` struct
@@ -39,7 +44,6 @@ defmodule PPNet.Message.Hello do
   def type_code, do: @type_code
 
   @impl true
-  # credo:disable-for-lines:10
   def pack(%__MODULE__{
         unique_id: unique_id,
         board_identifier: board_identifier,
@@ -48,8 +52,7 @@ defmodule PPNet.Message.Hello do
         boot_id: boot_id,
         ppnet_version: ppnet_version
       })
-      when is_binary(unique_id) and is_binary(board_identifier) and is_integer(version) and is_integer(board_version) and
-             is_integer(boot_id) and is_integer(ppnet_version) do
+      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id, ppnet_version) do
     Msgpax.pack!(
       [
         unique_id,
@@ -70,10 +73,8 @@ defmodule PPNet.Message.Hello do
     end
   end
 
-  # credo:disable-for-lines:2
   def parse([unique_id, board_identifier, version, board_version, boot_id, ppnet_version])
-      when is_binary(unique_id) and is_binary(board_identifier) and is_integer(version) and is_integer(board_version) and
-             is_integer(boot_id) and is_integer(ppnet_version) do
+      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id, ppnet_version) do
     {:ok,
      %Hello{
        unique_id: to_string(unique_id),
