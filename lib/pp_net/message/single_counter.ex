@@ -48,6 +48,10 @@ defmodule PPNet.Message.SingleCounter do
     )
   end
 
+  def pack(_message) do
+    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
+  end
+
   @impl true
   def parse(packaged_body) when is_binary(packaged_body) do
     with {:ok, unpacked_body} <- Msgpax.unpack(packaged_body) do

@@ -60,6 +60,10 @@ defmodule PPNet.Message.ChunkedMessageBody do
     >>
   end
 
+  def pack(_message) do
+    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
+  end
+
   @impl true
   def parse(
         <<transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(2)-unit(8),
