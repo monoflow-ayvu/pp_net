@@ -14,9 +14,11 @@ defmodule PPNet.Message.Hello do
   @type_code 1
 
   defguard is_valid_types(unique_id, board_identifier, version, board_version, boot_id, ppnet_version)
-           when is_binary(unique_id) and is_binary(board_identifier) and is_integer(version) and
-                  is_integer(board_version) and
-                  is_integer(boot_id) and is_integer(ppnet_version)
+           when is_binary(unique_id) and is_binary(board_identifier) and
+                  is_integer(version) and version >= 0 and
+                  is_integer(board_version) and board_version >= 0 and
+                  is_integer(boot_id) and boot_id >= 0 and
+                  is_integer(ppnet_version) and ppnet_version >= 0
 
   typedstruct do
     @typedoc """
