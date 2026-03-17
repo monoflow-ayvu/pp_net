@@ -51,7 +51,7 @@ defmodule PPNet.Message.ChunkedMessageBody do
         chunk_data: chunk_data
       })
       when is_transaction_id_valid(transaction_id) and is_chunk_index_valid(chunk_index) and is_integer(chunk_size) and
-             is_binary(chunk_data) do
+             chunk_size <= 254 and is_binary(chunk_data) do
     <<
       transaction_id::unsigned-integer-size(4)-unit(8),
       chunk_index::unsigned-integer-size(2)-unit(8),
