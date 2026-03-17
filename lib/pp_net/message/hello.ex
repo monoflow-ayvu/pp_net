@@ -13,6 +13,13 @@ defmodule PPNet.Message.Hello do
   @derive Jason.Encoder
   @type_code 1
 
+  defguard is_valid_types(unique_id, board_identifier, version, board_version, boot_id, ppnet_version)
+           when is_binary(unique_id) and is_binary(board_identifier) and
+                  is_integer(version) and version >= 0 and
+                  is_integer(board_version) and board_version >= 0 and
+                  is_integer(boot_id) and boot_id >= 0 and
+                  is_integer(ppnet_version) and ppnet_version >= 0
+
   typedstruct do
     @typedoc """
     The `PPNet.Message.Hello` struct
@@ -39,18 +46,30 @@ defmodule PPNet.Message.Hello do
   def type_code, do: @type_code
 
   @impl true
-  def pack(%__MODULE__{} = message) do
+  def pack(%__MODULE__{
+        unique_id: unique_id,
+        board_identifier: board_identifier,
+        version: version,
+        board_version: board_version,
+        boot_id: boot_id,
+        ppnet_version: ppnet_version
+      })
+      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id, ppnet_version) do
     Msgpax.pack!(
       [
-        message.unique_id,
-        message.board_identifier,
-        message.version,
-        message.board_version,
-        message.boot_id,
-        message.ppnet_version
+        unique_id,
+        board_identifier,
+        version,
+        board_version,
+        boot_id,
+        ppnet_version
       ],
       iodata: false
     )
+  end
+
+  def pack(_message) do
+    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 
   @impl true
@@ -60,10 +79,8 @@ defmodule PPNet.Message.Hello do
     end
   end
 
-  # credo:disable-for-lines:2
   def parse([unique_id, board_identifier, version, board_version, boot_id, ppnet_version])
-      when is_binary(unique_id) and is_binary(board_identifier) and is_integer(version) and is_integer(board_version) and
-             is_integer(boot_id) and is_integer(ppnet_version) do
+      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id, ppnet_version) do
     {:ok,
      %Hello{
        unique_id: to_string(unique_id),

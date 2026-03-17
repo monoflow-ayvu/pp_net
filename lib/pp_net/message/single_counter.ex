@@ -35,16 +35,21 @@ defmodule PPNet.Message.SingleCounter do
   def type_code, do: @type_code
 
   @impl true
-  def pack(%__MODULE__{} = message) do
+  def pack(%__MODULE__{kind: kind, value: value, pulses: pulses, duration_ms: duration_ms})
+      when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) do
     Msgpax.pack!(
       [
-        message.kind,
-        message.value,
-        message.pulses,
-        message.duration_ms
+        kind,
+        value,
+        pulses,
+        duration_ms
       ],
       iodata: false
     )
+  end
+
+  def pack(_message) do
+    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 
   @impl true

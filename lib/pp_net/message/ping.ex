@@ -47,22 +47,51 @@ defmodule PPNet.Message.Ping do
   @impl true
   def type_code, do: @type_code
 
+  defguardp is_valid_location(lat, lon, accuracy)
+            when is_float(lat) and is_float(lon) and is_integer(accuracy)
+
+  defguardp is_valid_cpu(cpu) when is_float(cpu) and cpu >= 0.0 and cpu <= 1.0
+
+  defguardp is_valid_tpu_memory(tpu_memory_percent)
+            when is_integer(tpu_memory_percent) and tpu_memory_percent >= 0 and
+                   tpu_memory_percent <= 100
+
+  defguardp is_valid_storage(total, used) when is_integer(total) and is_integer(used)
+
   @impl true
-  def pack(%__MODULE__{} = message) do
+  # credo:disable-for-lines:14
+  def pack(%__MODULE__{
+        temperature: temperature,
+        uptime_ms: uptime_ms,
+        location: %{lat: lat, lon: lon, accuracy: accuracy} = location,
+        cpu: cpu,
+        tpu_memory_percent: tpu_memory_percent,
+        tpu_ping_ms: tpu_ping_ms,
+        wifi: wifi,
+        storage: %{total: total, used: used} = storage,
+        extra: extra
+      })
+      when is_float(temperature) and is_integer(uptime_ms) and is_valid_location(lat, lon, accuracy) and
+             is_valid_cpu(cpu) and is_valid_tpu_memory(tpu_memory_percent) and is_integer(tpu_ping_ms) and is_list(wifi) and
+             is_valid_storage(total, used) and is_map(extra) do
     Msgpax.pack!(
       [
-        message.temperature,
-        message.uptime_ms,
-        pack_location(message.location),
-        message.cpu,
-        message.tpu_memory_percent,
-        message.tpu_ping_ms,
-        pack_wifi(message.wifi),
-        pack_storage(message.storage),
-        message.extra
+        temperature,
+        uptime_ms,
+        pack_location(location),
+        cpu,
+        tpu_memory_percent,
+        tpu_ping_ms,
+        pack_wifi(wifi),
+        pack_storage(storage),
+        extra
       ],
       iodata: false
     )
+  end
+
+  def pack(_message) do
+    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 
   @impl true

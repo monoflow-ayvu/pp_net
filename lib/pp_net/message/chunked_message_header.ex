@@ -22,6 +22,7 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   @ping_type_code 3
   @event_type_code 4
   @image_type_code 5
+  @valid_message_modules [Hello, SingleCounter, Ping, Event, Image]
 
   typedstruct do
     @typedoc """
@@ -45,13 +46,23 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   def type_code, do: @type_code
 
   @impl true
-  def pack(%__MODULE__{} = message) do
+  def pack(%__MODULE__{
+        message_module: message_module,
+        transaction_id: transaction_id,
+        datetime: %DateTime{} = datetime,
+        total_chunks: total_chunks
+      })
+      when message_module in @valid_message_modules and is_integer(transaction_id) and is_integer(total_chunks) do
     <<
-      message.message_module.type_code()::unsigned-integer-size(1)-unit(8),
-      message.transaction_id::unsigned-integer-size(4)-unit(8),
-      DateTime.to_unix(message.datetime)::unsigned-integer-size(4)-unit(8),
-      message.total_chunks::unsigned-integer-size(2)-unit(8)
+      message_module.type_code()::unsigned-integer-size(1)-unit(8),
+      transaction_id::unsigned-integer-size(4)-unit(8),
+      DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
+      total_chunks::unsigned-integer-size(2)-unit(8)
     >>
+  end
+
+  def pack(_message) do
+    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 
   @impl true
