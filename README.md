@@ -13,7 +13,7 @@ If [available on Hex](https://hex.pm/docs/publish), add the dependency to your l
 ```elixir
 def deps do
   [
-    {:pp_net, "~> 0.1.1"}
+    {:pp_net, "~> 0.1.2"}
   ]
 end
 ```
