@@ -7,6 +7,7 @@ defmodule PPNet.Message.Image do
 
   use TypedStruct
 
+  alias PPNet.PackError
   alias PPNet.ParseError
 
   @type_code 5
@@ -45,10 +46,13 @@ defmodule PPNet.Message.Image do
       @format_to_code[format]::unsigned-integer-size(1)-unit(8),
       data::binary-size(byte_size(data))-unit(8)
     >>
+  rescue
+    error ->
+      {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
   end
 
   def pack(_message) do
-    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
+    {:error, %PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 
   @impl true

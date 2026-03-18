@@ -8,6 +8,7 @@ defmodule PPNet.Message.Hello do
   use TypedStruct
 
   alias PPNet.Message.Hello
+  alias PPNet.PackError
   alias PPNet.ParseError
 
   @derive Jason.Encoder
@@ -66,10 +67,13 @@ defmodule PPNet.Message.Hello do
       ],
       iodata: false
     )
+  rescue
+    error ->
+      {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
   end
 
   def pack(_message) do
-    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
+    {:error, %PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 
   @impl true

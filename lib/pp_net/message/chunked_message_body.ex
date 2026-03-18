@@ -7,6 +7,7 @@ defmodule PPNet.Message.ChunkedMessageBody do
   use TypedStruct
 
   alias PPNet.Message.ChunkedMessageBody
+  alias PPNet.PackError
   alias PPNet.ParseError
 
   @type_code 7
@@ -58,10 +59,13 @@ defmodule PPNet.Message.ChunkedMessageBody do
       chunk_size::unsigned-integer-size(1)-unit(8),
       chunk_data::binary-size(chunk_size)-unit(8)
     >>
+  rescue
+    error ->
+      {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
   end
 
   def pack(_message) do
-    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
+    {:error, %PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 
   @impl true

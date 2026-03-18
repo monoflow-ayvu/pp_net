@@ -12,6 +12,7 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   alias PPNet.Message.Image
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
+  alias PPNet.PackError
   alias PPNet.ParseError
 
   @type_code 6
@@ -59,10 +60,13 @@ defmodule PPNet.Message.ChunkedMessageHeader do
       DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
       total_chunks::unsigned-integer-size(2)-unit(8)
     >>
+  rescue
+    error ->
+      {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
   end
 
   def pack(_message) do
-    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
+    {:error, %PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 
   @impl true
