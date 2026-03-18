@@ -8,6 +8,7 @@ defmodule PPNet.Message.Ping do
   use TypedStruct
 
   alias PPNet.Message.Ping
+  alias PPNet.PackError
   alias PPNet.ParseError
 
   @derive Jason.Encoder
@@ -19,6 +20,7 @@ defmodule PPNet.Message.Ping do
 
     ## Fields
 
+    * `session_id` - Session ID
     * `temperature` - CPU/board temperature in Celsius
     * `uptime_ms` - Device uptime in milliseconds
     * `location` - GPS location in WGS 84 (EPSG:4326): `lat` and `lon` in decimal degrees, `accuracy` in meters
@@ -29,6 +31,7 @@ defmodule PPNet.Message.Ping do
     * `storage` - Disk usage in kilobytes (KB): `total` and `used`
     * `extra` - Optional arbitrary key/value data
     """
+    field(:session_id, String.t(), enforce: true)
     field(:temperature, float(), enforce: true)
     field(:uptime_ms, integer(), enforce: true)
 
@@ -56,11 +59,14 @@ defmodule PPNet.Message.Ping do
             when is_integer(tpu_memory_percent) and tpu_memory_percent >= 0 and
                    tpu_memory_percent <= 100
 
+  defguard valid_wifi_lingh(wifi) when is_list(wifi) and length(wifi) <= 10
+
   defguardp is_valid_storage(total, used) when is_integer(total) and is_integer(used)
 
   @impl true
   # credo:disable-for-lines:14
   def pack(%__MODULE__{
+        session_id: session_id,
         temperature: temperature,
         uptime_ms: uptime_ms,
         location: %{lat: lat, lon: lon, accuracy: accuracy} = location,
@@ -73,9 +79,10 @@ defmodule PPNet.Message.Ping do
       })
       when is_float(temperature) and is_integer(uptime_ms) and is_valid_location(lat, lon, accuracy) and
              is_valid_cpu(cpu) and is_valid_tpu_memory(tpu_memory_percent) and is_integer(tpu_ping_ms) and is_list(wifi) and
-             is_valid_storage(total, used) and is_map(extra) do
+             is_valid_storage(total, used) and is_map(extra) and valid_wifi_lingh(wifi) do
     Msgpax.pack!(
       [
+        pack_session_id(session_id),
         temperature,
         uptime_ms,
         pack_location(location),
@@ -88,10 +95,13 @@ defmodule PPNet.Message.Ping do
       ],
       iodata: false
     )
+  rescue
+    error ->
+      {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
   end
 
   def pack(_message) do
-    {:error, %ParseError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
+    {:error, %PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 
   @impl true
@@ -101,12 +111,32 @@ defmodule PPNet.Message.Ping do
     end
   end
 
+  def parse([session_id, temperature, uptime_ms, location, cpu, tpu_memory_percent, tpu_ping_ms, wifi, storage, extra])
+      when is_list(session_id) and is_float(temperature) and is_integer(uptime_ms) and is_list(location) and
+             is_float(cpu) and is_integer(tpu_memory_percent) and is_integer(tpu_ping_ms) and is_list(wifi) and
+             is_list(storage) and is_map(extra) do
+    {:ok,
+     %Ping{
+       session_id: parse_session_id(session_id),
+       temperature: temperature,
+       uptime_ms: uptime_ms,
+       location: parse_location(location),
+       cpu: cpu,
+       tpu_memory_percent: tpu_memory_percent,
+       tpu_ping_ms: tpu_ping_ms,
+       wifi: parse_wifi(wifi),
+       storage: parse_storage(storage),
+       extra: extra
+     }}
+  end
+
   def parse([temperature, uptime_ms, location, cpu, tpu_memory_percent, tpu_ping_ms, wifi, storage, extra])
       when is_float(temperature) and is_integer(uptime_ms) and is_list(location) and is_float(cpu) and
              is_integer(tpu_memory_percent) and is_integer(tpu_ping_ms) and is_list(wifi) and is_list(storage) and
              is_map(extra) do
     {:ok,
      %Ping{
+       session_id: nil,
        temperature: temperature,
        uptime_ms: uptime_ms,
        location: parse_location(location),
@@ -165,5 +195,17 @@ defmodule PPNet.Message.Ping do
 
   defp pack_storage(%{total: total, used: used}) do
     [total, used]
+  end
+
+  defp pack_session_id(session_id) do
+    session_id
+    |> UUID.string_to_binary!()
+    |> :binary.bin_to_list()
+  end
+
+  defp parse_session_id(session_id) do
+    session_id
+    |> :binary.list_to_bin()
+    |> UUID.binary_to_string!()
   end
 end
