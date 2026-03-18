@@ -63,6 +63,24 @@ defmodule PPNet.Message.Ping do
 
   defguardp is_valid_storage(total, used) when is_integer(total) and is_integer(used)
 
+  defguardp is_valid_ping_list(
+              session_id,
+              temperature,
+              uptime_ms,
+              location,
+              cpu,
+              tpu_memory_percent,
+              tpu_ping_ms,
+              wifi,
+              storage,
+              extra
+            )
+            when is_list(session_id) and length(session_id) == 16 and
+                   is_float(temperature) and is_integer(uptime_ms) and
+                   is_list(location) and is_float(cpu) and is_integer(tpu_memory_percent) and
+                   is_integer(tpu_ping_ms) and is_list(wifi) and
+                   is_list(storage) and is_map(extra)
+
   @impl true
   # credo:disable-for-lines:14
   def pack(%__MODULE__{
@@ -112,9 +130,18 @@ defmodule PPNet.Message.Ping do
   end
 
   def parse([session_id, temperature, uptime_ms, location, cpu, tpu_memory_percent, tpu_ping_ms, wifi, storage, extra])
-      when is_list(session_id) and is_float(temperature) and is_integer(uptime_ms) and is_list(location) and
-             is_float(cpu) and is_integer(tpu_memory_percent) and is_integer(tpu_ping_ms) and is_list(wifi) and
-             is_list(storage) and is_map(extra) do
+      when is_valid_ping_list(
+             session_id,
+             temperature,
+             uptime_ms,
+             location,
+             cpu,
+             tpu_memory_percent,
+             tpu_ping_ms,
+             wifi,
+             storage,
+             extra
+           ) do
     {:ok,
      %Ping{
        session_id: parse_session_id(session_id),

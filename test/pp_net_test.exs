@@ -327,7 +327,7 @@ defmodule PPNetTest do
       # unique_id not a binary
       assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
                Hello.pack(%Hello{
-                 unique_id: 12345,
+                 unique_id: 12_345,
                  board_identifier: "Tester",
                  version: 1,
                  board_version: 17_185,
