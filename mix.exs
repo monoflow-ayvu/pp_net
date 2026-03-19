@@ -2,7 +2,7 @@ defmodule PpNet.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/monoflow-ayvu/pp_net"
-  @version "0.1.2"
+  @version "0.1.3"
 
   def project do
     [
