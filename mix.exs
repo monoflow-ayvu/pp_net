@@ -2,7 +2,7 @@ defmodule PpNet.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/monoflow-ayvu/pp_net"
-  @version "0.1.3"
+  @version File.read!("VERSION") |> String.trim()
 
   def project do
     [
@@ -59,7 +59,8 @@ defmodule PpNet.MixProject do
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
       maintainers: ["JVMartyns", "Fernando Mumbach"],
-      description: "Message protocol with error correction (Reed-Solomon) and framing (COBS)"
+      description: "Message protocol with error correction (Reed-Solomon) and framing (COBS)",
+      files: ~w(lib mix.exs README.md CHANGELOG.md LICENSE VERSION)
     }
   end
 
@@ -81,7 +82,7 @@ defmodule PpNet.MixProject do
       source_ref: "v#{@version}",
       source_url: @source_url,
       main: "PPNet",
-      extras: [{"README.md", [title: "README"]}, "LICENSE"]
+      extras: [{"README.md", [title: "README"]}, "CHANGELOG.md", "LICENSE"]
     ]
   end
 end
