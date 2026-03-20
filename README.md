@@ -3,6 +3,7 @@
 [![Hex.pm](https://img.shields.io/hexpm/v/pp_net.svg)](https://hex.pm/packages/pp_net)
 [![Hex Docs](https://img.shields.io/badge/docs-hexdocs-blue.svg)](https://hexdocs.pm/pp_net)
 [![License](https://img.shields.io/hexpm/l/pp_net.svg)](https://github.com/monoflow-ayvu/pp_net/blob/main/LICENCE)
+[![Changelog](https://img.shields.io/badge/changelog-md-blue.svg)](https://github.com/monoflow-ayvu/pp_net/blob/main/CHANGELOG.md)
 
 Message protocol with error correction (Reed-Solomon) and framing (COBS).
 
@@ -94,19 +95,22 @@ Body: MessagePack array.
 
 ### Type 3 — Ping
 
-Body: MessagePack array with 9 elements in order:
+Body: MessagePack array with 10 elements in order:
 
-| Field              | Type    | Wire format / notes                                                                                       |
-| ------------------ | ------- | --------------------------------------------------------------------------------------------------------- |
-| temperature        | float   | —                                                                                                         |
-| uptime_ms          | integer | —                                                                                                         |
-| location           | list    | `[lat, lon, accuracy]` (3 elements: float, float, integer)                                                |
-| cpu                | float   | —                                                                                                         |
-| tpu_memory_percent | integer | % of TPU memory                                                                                           |
-| tpu_ping_ms        | integer | TPU ping time (ms)                                                                                        |
-| wifi               | list    | List of **7-byte binaries**: 6 bytes MAC (raw) + 1 byte RSSI (signed int8, dBm).                          |
-| storage            | list    | `[total, used]` (2 integers, kilobytes — clients must convert before sending; receivers always assume KB) |
-| extra              | map     | Optional key/value data                                                                                   |
+| Field              | Type    | Validation                        | Wire format / notes                                                                                       |
+| ------------------ | ------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| session_id         | string  | UUID format                       | List of 16 integers (bytes); decoded to UUID string                                                       |
+| temperature        | float   | —                                 | —                                                                                                         |
+| uptime_ms          | integer | —                                 | —                                                                                                         |
+| location           | list    | lat/lon: float, accuracy: integer | `[lat, lon, accuracy]`                                                                                    |
+| cpu                | float   | 0.0 <= cpu <= 1.0                 | —                                                                                                         |
+| tpu_memory_percent | integer | 0 <= value <= 100                 | % of TPU memory                                                                                           |
+| tpu_ping_ms        | integer | —                                 | TPU ping time (ms)                                                                                        |
+| wifi               | list    | max 10 entries                    | List of **7-byte binaries**: 6 bytes MAC (raw) + 1 byte RSSI (signed int8, dBm)                          |
+| storage            | list    | total/used: integer               | `[total, used]` (2 integers, kilobytes — clients must convert before sending; receivers always assume KB) |
+| extra              | map     | —                                 | Optional key/value data                                                                                   |
+
+**Backward compatibility:** A 9-element list without `session_id` is still accepted; `session_id` will be `nil`.
 
 **WiFi encoding:** Each entry is 7 bytes: MAC address as 6 raw bytes (no colon-separated string), then RSSI as one signed byte. This keeps the payload small so the ping stays within a single frame.
 
