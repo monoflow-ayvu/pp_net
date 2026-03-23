@@ -2,7 +2,7 @@ defmodule PpNet.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/monoflow-ayvu/pp_net"
-  @version String.trim(File.read!("VERSION"))
+  @version "VERSION" |> File.read!() |> String.trim()
 
   def project do
     [
