@@ -6,7 +6,7 @@ defmodule BackwardCompatibilityTest do
 
   # alias PPNet.Message.ChunkedMessageBody
   # alias PPNet.Message.ChunkedMessageHeader
-  # alias PPNet.Message.Event
+  alias PPNet.Message.Event
   alias PPNet.Message.Hello
   # alias PPNet.Message.Image
   alias PPNet.Message.Ping
@@ -492,6 +492,35 @@ defmodule BackwardCompatibilityTest do
       # extra must be a map, not a list (current 10-element format)
       assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
                Ping.parse([[], 25.0, 1000, [40.0, -74.0, 100], 0.5, 50, 100, [], [1000, 500], ["not", "a", "map"]])
+    end
+  end
+
+  describe "decode PPNet.Message.Event (from v0.1.3)" do
+    test "parse/1 with valid binary data" do
+      payload =
+        <<0x1F, 0x04, 0x92, 0x01, 0x82, 0xA5, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x64, 0xA9, 0x73, 0x65, 0x6E, 0x73, 0x6F,
+          0x72, 0x5F, 0x69, 0x64, 0x01, 0x84, 0x7F, 0xF5, 0x46, 0x64, 0xA1, 0x40, 0x9E, 0x00>>
+
+      assert %{
+               messages: [
+                 %Event{
+                   kind: :detection,
+                   data: %{"sensor_id" => 1, "value" => 100},
+                   datetime: nil
+                 }
+               ],
+               errors: []
+             } = PPNet.parse(payload)
+    end
+
+    test "parse/1 with invalid list returns error" do
+      # kind code 99 is not a valid event kind
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
+               Event.parse([99, %{"sensor_id" => 1}])
+
+      # data must be a map, not a list
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
+               Event.parse([1, ["sensor_id", 1]])
     end
   end
 end
