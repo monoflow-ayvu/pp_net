@@ -487,4 +487,94 @@ defmodule PpnetEncodeTest do
                })
     end
   end
+
+  describe "The following tests are only to remind me approximately of the message sizes" do
+    test "encode a Ping message" do
+      message = %Ping{
+        session_id: "5388724c-457e-4332-a98c-e67b2053662c",
+        temperature: 60.0,
+        uptime_ms: 300_000_000_000,
+        location: %{lat: 89.123456789, lon: 179.987654321, accuracy: 10},
+        cpu: 1.0,
+        tpu_memory_percent: 100,
+        tpu_ping_ms: 600,
+        wifi: [
+          %{mac: "01:23:45:67:89:AB", rssi: -5},
+          %{mac: "00:1A:2B:3C:4D:5E", rssi: -12},
+          %{mac: "DC:FE:01:23:45:67", rssi: -20},
+          %{mac: "12:34:56:78:9A:BC", rssi: -25},
+          %{mac: "A1:B2:C3:D4:E5:F6", rssi: -30},
+          %{mac: "9A:BC:DE:F0:12:34", rssi: -43},
+          %{mac: "FE:DC:BA:98:76:54", rssi: -55},
+          %{mac: "02:04:06:08:0A:0C", rssi: -69},
+          %{mac: "F0:E1:D2:C3:B4:A5", rssi: -78},
+          %{mac: "55:44:33:22:11:00", rssi: -99}
+        ],
+        storage: %{total: 4_294_967, used: 4_000_000},
+        datetime: ~U[2026-03-27 16:25:12Z],
+        extra: %{}
+      }
+
+      assert byte_size(PPNet.encode_message(message)) == 184
+    end
+
+    test "encode a Hello message" do
+      message = %Hello{
+        unique_id: "5388724c-457e-4332-a98c-e67b2053662c",
+        board_identifier: "Raspberry-Pi-Zero-2W",
+        version: 10_000,
+        board_version: 10_000,
+        boot_id: 1_000_000_000,
+        ppnet_version: 5,
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert byte_size(PPNet.encode_message(message)) == 88
+    end
+
+    test "encode a SingleCounter message" do
+      message = %SingleCounter{
+        kind: "energy-meter-kwh",
+        value: 999_999,
+        pulses: 10_000,
+        duration_ms: 3_600_000,
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert byte_size(PPNet.encode_message(message)) == 47
+    end
+
+    test "encode an Event message" do
+      image_id =
+        "997a6060-d384-4a35-8507-3eead1aed51e"
+        |> UUID.string_to_binary!()
+        |> :binary.bin_to_list()
+
+      message = %Event{
+        kind: :detection,
+        data: %{
+          "image_id" => image_id,
+          "d" => [
+            %{
+              "bbox" => [339.9502060711384, 152.13321420550346, 86.00608867406845, 85.85731941461563],
+              "c" => 0,
+              "s" => 0.53912
+            },
+            %{
+              "bbox" => [339.9502060711384, 152.13321420550346, 86.00608867406845, 85.85731941461563],
+              "c" => 0,
+              "s" => 0.53912
+            },
+            %{
+              "bbox" => [339.9502060711384, 152.13321420550346, 86.00608867406845, 85.85731941461563],
+              "c" => 0,
+              "s" => 0.53912
+            }
+          ]
+        }
+      }
+
+      assert byte_size(PPNet.encode_message(message)) == 224
+    end
+  end
 end
