@@ -24,26 +24,35 @@ defmodule PPNet.Message.SingleCounter do
     * `value` - The value of the counter
     * `pulses` - The number of pulses
     * `duration_ms` - The duration of the counter in milliseconds
+    * `datetime` - The timestamp when the counter message was sent
     """
 
     field(:kind, String.t(), enforce: true)
     field(:value, any(), enforce: true)
     field(:pulses, integer(), enforce: true)
     field(:duration_ms, integer(), enforce: true)
+    field(:datetime, DateTime.t(), enforce: true)
   end
 
   @impl true
   def type_code, do: @type_code
 
   @impl true
-  def pack(%__MODULE__{kind: kind, value: value, pulses: pulses, duration_ms: duration_ms})
+  def pack(%__MODULE__{
+        kind: kind,
+        value: value,
+        pulses: pulses,
+        duration_ms: duration_ms,
+        datetime: %DateTime{} = datetime
+      })
       when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) do
     Msgpax.pack!(
       [
         kind,
         value,
         pulses,
-        duration_ms
+        duration_ms,
+        DateTime.to_unix(datetime)
       ],
       iodata: false
     )
@@ -70,7 +79,20 @@ defmodule PPNet.Message.SingleCounter do
        kind: kind,
        value: value,
        pulses: pulses,
-       duration_ms: duration_ms
+       duration_ms: duration_ms,
+       datetime: DateTime.from_unix!(0)
+     }}
+  end
+
+  def parse([kind, value, pulses, duration_ms, datetime])
+      when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) and is_integer(datetime) do
+    {:ok,
+     %SingleCounter{
+       kind: kind,
+       value: value,
+       pulses: pulses,
+       duration_ms: duration_ms,
+       datetime: DateTime.from_unix!(datetime)
      }}
   end
 
