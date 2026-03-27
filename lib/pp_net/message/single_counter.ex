@@ -72,18 +72,6 @@ defmodule PPNet.Message.SingleCounter do
     end
   end
 
-  def parse([kind, value, pulses, duration_ms])
-      when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) do
-    {:ok,
-     %SingleCounter{
-       kind: kind,
-       value: value,
-       pulses: pulses,
-       duration_ms: duration_ms,
-       datetime: DateTime.from_unix!(0)
-     }}
-  end
-
   def parse([kind, value, pulses, duration_ms, datetime])
       when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) and is_integer(datetime) do
     {:ok,
@@ -93,6 +81,18 @@ defmodule PPNet.Message.SingleCounter do
        pulses: pulses,
        duration_ms: duration_ms,
        datetime: DateTime.from_unix!(datetime)
+     }}
+  end
+
+  def parse([kind, value, pulses, duration_ms])
+      when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) do
+    {:ok,
+     %SingleCounter{
+       kind: kind,
+       value: value,
+       pulses: pulses,
+       duration_ms: duration_ms,
+       datetime: nil
      }}
   end
 
