@@ -115,7 +115,7 @@ defmodule PPNet.Message.Hello do
        board_version: board_version,
        boot_id: boot_id,
        ppnet_version: ppnet_version,
-       datetime: DateTime.utc_now()
+       datetime: DateTime.from_unix!(0)
      }}
   end
 
