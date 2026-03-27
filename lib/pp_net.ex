@@ -16,11 +16,12 @@ defmodule PPNet do
       ...>   version: 4660,
       ...>   board_version: 17_185,
       ...>   boot_id: 87_372_886,
-      ...>   ppnet_version: 1
+      ...>   ppnet_version: 1,
+      ...>   datetime: ~U[2026-03-26 21:00:55.352750Z]
       ...> } |> PPNet.encode_message()
-      <<41, 1, 150, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101,
-        115, 116, 101, 114, 205, 18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 1, 143, 165,
-        119, 204, 215, 155, 76, 244, 0>>
+      <<46, 1, 151, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101,
+        115, 116, 101, 114, 205, 18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 1, 206, 105,
+        197, 158, 135, 37, 216, 194, 76, 126, 139, 15, 150, 0>>
 
       iex> %PPNet.Message.SingleCounter{
       ...>   kind: "bar",
@@ -116,7 +117,8 @@ defmodule PPNet do
       ...>   version: 4660,
       ...>   board_version: 17_185,
       ...>   boot_id: 87_372_886,
-      ...>   ppnet_version: 1
+      ...>   ppnet_version: 1,
+      ...>   datetime: ~U[2026-03-26 21:00:55Z]
       ...> }
       iex> hello |> PPNet.encode_message() |> PPNet.parse() |> Map.get(:messages) |> hd() == hello
       true
