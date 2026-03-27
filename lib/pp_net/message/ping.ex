@@ -44,6 +44,7 @@ defmodule PPNet.Message.Ping do
     field(:tpu_ping_ms, integer(), enforce: true)
     field(:wifi, list(%{required(:mac) => String.t(), required(:rssi) => integer()}), default: [])
     field(:storage, %{required(:total) => integer(), required(:used) => integer()}, enforce: true)
+    field(:datetime, DateTime.t(), enforce: true)
     field(:extra, %{optional(String.t()) => any()}, default: %{})
   end
 
@@ -93,6 +94,7 @@ defmodule PPNet.Message.Ping do
         tpu_ping_ms: tpu_ping_ms,
         wifi: wifi,
         storage: %{total: total, used: used} = storage,
+        datetime: %DateTime{} = datetime,
         extra: extra
       })
       when is_float(temperature) and is_integer(uptime_ms) and is_valid_location(lat, lon, accuracy) and
@@ -109,6 +111,7 @@ defmodule PPNet.Message.Ping do
         tpu_ping_ms,
         pack_wifi(wifi),
         pack_storage(storage),
+        DateTime.to_unix(datetime),
         extra
       ],
       iodata: false
@@ -127,6 +130,47 @@ defmodule PPNet.Message.Ping do
     with {:ok, unpacked_body} <- Msgpax.unpack(packaged_body) do
       parse(unpacked_body)
     end
+  end
+
+  def parse([
+        session_id,
+        temperature,
+        uptime_ms,
+        location,
+        cpu,
+        tpu_memory_percent,
+        tpu_ping_ms,
+        wifi,
+        storage,
+        datetime,
+        extra
+      ])
+      when is_valid_ping_list(
+             session_id,
+             temperature,
+             uptime_ms,
+             location,
+             cpu,
+             tpu_memory_percent,
+             tpu_ping_ms,
+             wifi,
+             storage,
+             extra
+           ) and is_integer(datetime) do
+    {:ok,
+     %Ping{
+       session_id: parse_session_id(session_id),
+       temperature: temperature,
+       uptime_ms: uptime_ms,
+       location: parse_location(location),
+       cpu: cpu,
+       tpu_memory_percent: tpu_memory_percent,
+       tpu_ping_ms: tpu_ping_ms,
+       wifi: parse_wifi(wifi),
+       storage: parse_storage(storage),
+       datetime: DateTime.from_unix!(datetime),
+       extra: extra
+     }}
   end
 
   def parse([session_id, temperature, uptime_ms, location, cpu, tpu_memory_percent, tpu_ping_ms, wifi, storage, extra])
@@ -153,6 +197,7 @@ defmodule PPNet.Message.Ping do
        tpu_ping_ms: tpu_ping_ms,
        wifi: parse_wifi(wifi),
        storage: parse_storage(storage),
+       datetime: nil,
        extra: extra
      }}
   end
@@ -172,7 +217,8 @@ defmodule PPNet.Message.Ping do
        tpu_ping_ms: tpu_ping_ms,
        wifi: parse_wifi(wifi),
        storage: parse_storage(storage),
-       extra: extra
+       extra: extra,
+       datetime: nil
      }}
   end
 
