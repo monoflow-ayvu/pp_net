@@ -74,12 +74,13 @@ defmodule PPNet do
       iex> image = %PPNet.Message.Image{
       ...>   id: "00000000-0000-0000-0000-000000000000",
       ...>   data: image_data,
-      ...>   format: :webp
+      ...>   format: :webp,
+      ...>   datetime: ~U[2026-03-27 20:15:41Z]
       ...> }
       iex> [header_bin | chunks_bin] = PPNet.encode_message(image)
       iex> %{messages: [header | chunks], errors: []} = PPNet.parse([header_bin | chunks_bin])
       iex> PPNet.chunked_to_message([header | chunks])
-      {:ok, %PPNet.Message.Image{id: "00000000-0000-0000-0000-000000000000", format: :webp, data: image_data}}
+      {:ok, %PPNet.Message.Image{id: "00000000-0000-0000-0000-000000000000", format: :webp, data: image_data, datetime: ~U[2026-03-27 20:15:41Z]}}
 
 
   The optional `limit` parameter controls the maximum frame size in bytes (default 254).
@@ -90,7 +91,8 @@ defmodule PPNet do
       ...>   %PPNet.Message.Image{
       ...>     id: "00000000-0000-0000-0000-000000000000",
       ...>     data: image_data,
-      ...>     format: :webp
+      ...>     format: :webp,
+      ...>     datetime: ~U[2026-03-27 20:15:41Z]
       ...>   },
       ...>   limit: 100
       ...> )
