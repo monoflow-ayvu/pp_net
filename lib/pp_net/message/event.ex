@@ -26,6 +26,7 @@ defmodule PPNet.Message.Event do
 
     * `kind` - The kind of event (`:detection`)
     * `data` - Arbitrary key/value payload associated with the event
+    * `datetime` - Timestamp of the event
     """
 
     field(:kind, event_kind(), enforce: true)

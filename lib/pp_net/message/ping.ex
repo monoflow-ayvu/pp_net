@@ -29,6 +29,7 @@ defmodule PPNet.Message.Ping do
     * `tpu_ping_ms` - TPU round-trip ping time in milliseconds
     * `wifi` - List of visible WiFi networks, each with `mac` (string) and `rssi` (integer, dBm)
     * `storage` - Disk usage in kilobytes (KB): `total` and `used`
+    * `datetime` - Timestamp of the ping message
     * `extra` - Optional arbitrary key/value data
     """
     field(:session_id, String.t(), enforce: true)
