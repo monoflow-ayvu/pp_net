@@ -4,8 +4,8 @@ defmodule BackwardCompatibilityTest do
   import ExUnit.CaptureLog
   import PPNet.Test.Helper
 
-  alias PPNet.Message.ChunkedMessageBody
-  alias PPNet.Message.ChunkedMessageHeader
+  # alias PPNet.Message.ChunkedMessageBody
+  # alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -526,38 +526,21 @@ defmodule BackwardCompatibilityTest do
 
   describe "decode image (from v0.1.3)" do
     test "parse/1 with valid binary data" do
-      payload = File.read!("test/support/static/image.webp")
+      image = File.read!("test/support/static/image.webp")
+      # image bin from v0.1.3
+      # <<
+      #   UUID.string_to_binary!(id)::binary-size(16)-unit(8),
+      #   @format_to_code[format]::unsigned-integer-size(1)-unit(8),
+      #   data::binary
+      # >>
+      image_bin_v013 = File.read!("test/support/static/image_bin_v0_1_3")
 
-      assert %{
-               messages: [
-                 %ChunkedMessageHeader{
-                   message_module: Image,
-                   transaction_id: transaction_id,
-                   total_chunks: 150,
-                   datetime: %DateTime{}
-                 }
-                 | chunks
-               ],
-               errors: []
-             } =
-               %Image{id: UUID.uuid4(), data: payload, format: :webp, datetime: ~U[2026-03-27 20:15:41Z]}
-               |> PPNet.encode_message(limit: 200)
-               |> Enum.join()
-               |> PPNet.parse()
-
-      assert Enum.all?(chunks, fn chunk ->
-               %ChunkedMessageBody{
-                 chunk_data: chunk_data,
-                 chunk_size: chunk_size,
-                 chunk_index: chunk_index,
-                 transaction_id: ^transaction_id
-               } = chunk
-
-               assert is_integer(transaction_id)
-               assert is_integer(chunk_index)
-               assert is_binary(chunk_data)
-               assert byte_size(chunk_data) == chunk_size
-             end)
+      {:ok,
+       %Image{
+         datetime: nil,
+         data: ^image,
+         format: :webp
+       }} = Image.parse(image_bin_v013)
     end
 
     test "parse/1 with short binary returns error" do
