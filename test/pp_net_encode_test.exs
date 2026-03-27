@@ -366,8 +366,9 @@ defmodule PpnetEncodeTest do
         PPNet.encode_message(
           %Image{
             id: id,
+            format: :webp,
             data: image,
-            format: :webp
+            datetime: ~U[2026-03-27 20:15:41Z]
           },
           limit: 200
         )
@@ -417,7 +418,7 @@ defmodule PpnetEncodeTest do
       image = File.read!("test/support/static/image.webp")
 
       messages =
-        %Image{id: UUID.uuid4(), data: image, format: :webp}
+        %Image{id: UUID.uuid4(), data: image, format: :webp, datetime: ~U[2026-03-27 20:15:41Z]}
         |> PPNet.encode_message()
         |> Enum.join()
 
@@ -457,7 +458,8 @@ defmodule PpnetEncodeTest do
                Image.pack(%Image{
                  id: "00000000-0000-0000-0000-000000000000",
                  format: :gif,
-                 data: "image data"
+                 data: "image data",
+                 datetime: DateTime.utc_now()
                })
 
       # id must be a valid UUID — 10-byte string is neither a 16-byte raw UUID nor a formatted one
@@ -465,7 +467,8 @@ defmodule PpnetEncodeTest do
                Image.pack(%Image{
                  id: "short-uuid",
                  format: :webp,
-                 data: "image data"
+                 data: "image data",
+                 datetime: DateTime.utc_now()
                })
     end
   end

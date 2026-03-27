@@ -473,7 +473,7 @@ defmodule PPNetTest do
                ],
                errors: []
              } =
-               %Image{id: UUID.uuid4(), data: payload, format: :webp}
+               %Image{id: UUID.uuid4(), data: payload, format: :webp, datetime: ~U[2026-03-27 20:15:41Z]}
                |> PPNet.encode_message(limit: 200)
                |> Enum.join()
                |> PPNet.parse()
@@ -677,7 +677,7 @@ defmodule PPNetTest do
 
       [image_header | image_chunks] =
         PPNet.encode_message(
-          %Image{id: UUID.uuid4(), data: image, format: :webp},
+          %Image{id: UUID.uuid4(), data: image, format: :webp, datetime: ~U[2026-03-27 20:15:41Z]},
           limit: 200
         )
 

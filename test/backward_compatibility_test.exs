@@ -4,11 +4,11 @@ defmodule BackwardCompatibilityTest do
   import ExUnit.CaptureLog
   import PPNet.Test.Helper
 
-  # alias PPNet.Message.ChunkedMessageBody
-  # alias PPNet.Message.ChunkedMessageHeader
+  alias PPNet.Message.ChunkedMessageBody
+  alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
-  # alias PPNet.Message.Image
+  alias PPNet.Message.Image
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
 
@@ -521,6 +521,48 @@ defmodule BackwardCompatibilityTest do
       # data must be a map, not a list
       assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
                Event.parse([1, ["sensor_id", 1]])
+    end
+  end
+
+  describe "decode image (from v0.1.3)" do
+    test "parse/1 with valid binary data" do
+      payload = File.read!("test/support/static/image.webp")
+
+      assert %{
+               messages: [
+                 %ChunkedMessageHeader{
+                   message_module: Image,
+                   transaction_id: transaction_id,
+                   total_chunks: 150,
+                   datetime: %DateTime{}
+                 }
+                 | chunks
+               ],
+               errors: []
+             } =
+               %Image{id: UUID.uuid4(), data: payload, format: :webp, datetime: ~U[2026-03-27 20:15:41Z]}
+               |> PPNet.encode_message(limit: 200)
+               |> Enum.join()
+               |> PPNet.parse()
+
+      assert Enum.all?(chunks, fn chunk ->
+               %ChunkedMessageBody{
+                 chunk_data: chunk_data,
+                 chunk_size: chunk_size,
+                 chunk_index: chunk_index,
+                 transaction_id: ^transaction_id
+               } = chunk
+
+               assert is_integer(transaction_id)
+               assert is_integer(chunk_index)
+               assert is_binary(chunk_data)
+               assert byte_size(chunk_data) == chunk_size
+             end)
+    end
+
+    test "parse/1 with short binary returns error" do
+      # less than 17 bytes: can't match <<id::16, format_code::1, data::binary>>
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} = Image.parse(<<1, 2, 3>>)
     end
   end
 end
