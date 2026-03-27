@@ -89,31 +89,38 @@ defmodule PpnetEncodeTest do
         duration_ms: 1500,
         kind: "bar",
         pulses: 0,
-        value: 42
+        value: 42,
+        datetime: ~U[2026-03-27 12:58:06Z]
       }
 
       assert PPNet.encode_message(message) ==
-               <<0x08, 0x02, 0x94, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x0C, 0xCD, 0x05, 0xDC, 0xE8, 0x63, 0xFF, 0xB3, 0x4D,
-                 0x07, 0x21, 0xD6, 0x00>>
+               <<0x08, 0x02, 0x95, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x11, 0xCD, 0x05, 0xDC, 0xCE, 0x69, 0xC6, 0x7E, 0xDE,
+                 0x34, 0x40, 0x8D, 0x2C, 0x55, 0xEE, 0xF9, 0x2D, 0x00>>
     end
 
     test "pack/1 with invalid struct returns error" do
       # kind must be a binary string
       assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
-               SingleCounter.pack(%SingleCounter{kind: 123, value: 42, pulses: 0, duration_ms: 1500})
+               SingleCounter.pack(%SingleCounter{kind: 123, value: 42, pulses: 0, duration_ms: 1500, datetime: nil})
 
       # duration_ms must be an integer
       assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
-               SingleCounter.pack(%SingleCounter{kind: "bar", value: 42, pulses: 0, duration_ms: "1500ms"})
+               SingleCounter.pack(%SingleCounter{
+                 kind: "bar",
+                 value: 42,
+                 pulses: 0,
+                 duration_ms: "1500ms",
+                 datetime: nil
+               })
     end
 
     test "encode_message/2 with limit above maximum clamps to 254" do
-      message = %SingleCounter{kind: "a", value: 0, pulses: 0, duration_ms: 0}
+      message = %SingleCounter{kind: "a", value: 0, pulses: 0, duration_ms: 0, datetime: DateTime.utc_now()}
       assert PPNet.encode_message(message, limit: 9999) == PPNet.encode_message(message)
     end
 
     test "encode_message/2 with limit below minimum clamps to 17" do
-      message = %SingleCounter{kind: "a", value: 0, pulses: 0, duration_ms: 0}
+      message = %SingleCounter{kind: "a", value: 0, pulses: 0, duration_ms: 0, datetime: DateTime.utc_now()}
       assert PPNet.encode_message(message, limit: 5) == PPNet.encode_message(message, limit: 17)
     end
   end

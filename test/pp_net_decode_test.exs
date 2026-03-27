@@ -284,8 +284,8 @@ defmodule PPNetTest do
     test "parse/1 with valid binary data when payload is a list" do
       payload =
         :binary.bin_to_list(
-          <<0x08, 0x02, 0x94, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x0C, 0xCD, 0x05, 0xDC, 0xE8, 0x63, 0xFF, 0xB3, 0x4D, 0x07,
-            0x21, 0xD6, 0x00>>
+          <<0x08, 0x02, 0x95, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x0F, 0xCD, 0x05, 0xDC, 0xCE, 0x69, 0xC6, 0x84, 0x2B, 0x65,
+            0x1D, 0xFE, 0x62, 0xDB, 0x35, 0x02, 0xBF, 0x00>>
         )
 
       assert PPNet.parse(payload) ==
@@ -295,7 +295,8 @@ defmodule PPNetTest do
                      duration_ms: 1500,
                      pulses: 0,
                      value: 42,
-                     kind: "bar"
+                     kind: "bar",
+                     datetime: ~U[2026-03-27 13:20:43Z]
                    }
                  ],
                  errors: []
@@ -517,7 +518,8 @@ defmodule PPNetTest do
         kind: String.duplicate("x", 20),
         value: 0,
         pulses: 0,
-        duration_ms: 0
+        duration_ms: 0,
+        datetime: ~U[2026-03-27 13:20:43Z]
       }
 
       [header_bin | _chunks] = PPNet.encode_message(message, limit: 30)
@@ -642,7 +644,8 @@ defmodule PPNetTest do
           duration_ms: 1500,
           kind: "bar",
           pulses: 0,
-          value: 42
+          value: 42,
+          datetime: ~U[2026-03-27 13:20:43Z]
         })
 
       ping =
