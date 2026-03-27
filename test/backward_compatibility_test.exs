@@ -10,7 +10,7 @@ defmodule BackwardCompatibilityTest do
   alias PPNet.Message.Hello
   # alias PPNet.Message.Image
   alias PPNet.Message.Ping
-  # alias PPNet.Message.SingleCounter
+  alias PPNet.Message.SingleCounter
 
   require Logger
 
@@ -323,6 +323,89 @@ defmodule BackwardCompatibilityTest do
                ],
                errors: []
              } = PPNet.parse(payload)
+    end
+  end
+
+  describe "decode PPNet.Message.SingleCounter (from v0.1.3)" do
+    test "parse/1 with valid binary data" do
+      payload =
+        <<0x08, 0x02, 0x94, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x0C, 0xCD, 0x05, 0xDC, 0xE8, 0x63, 0xFF, 0xB3, 0x4D, 0x07,
+          0x21, 0xD6, 0x00>>
+
+      assert %{
+               messages: [
+                 %SingleCounter{
+                   duration_ms: 1500,
+                   pulses: 0,
+                   value: 42,
+                   kind: "bar",
+                   datetime: ~U[1970-01-01 00:00:00Z]
+                 }
+               ],
+               errors: []
+             } =
+               PPNet.parse(payload)
+    end
+
+    test "parse/1 with valid binary data when payload is a list" do
+      payload =
+        :binary.bin_to_list(
+          <<0x08, 0x02, 0x94, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x0C, 0xCD, 0x05, 0xDC, 0xE8, 0x63, 0xFF, 0xB3, 0x4D, 0x07,
+            0x21, 0xD6, 0x00>>
+        )
+
+      assert PPNet.parse(payload) ==
+               %{
+                 messages: [
+                   %SingleCounter{
+                     duration_ms: 1500,
+                     pulses: 0,
+                     value: 42,
+                     kind: "bar",
+                     datetime: ~U[1970-01-01 00:00:00Z]
+                   }
+                 ],
+                 errors: []
+               }
+    end
+
+    test "parse/1 with invalid binary data" do
+      payload = <<
+        # message type
+        0x02,
+        # checksum (adler32)
+        0x18,
+        0x0F,
+        0x04,
+        0x45,
+        # body (msgpack)
+        # Invalid MsgPack for SingleCounter
+        0x94,
+        0xA0,
+        0x00
+      >>
+
+      assert %{
+               messages: [],
+               errors: [
+                 %PPNet.ParseError{
+                   data: %{payload: <<2, 24, 15, 4, 69, 148, 160>>},
+                   message: "Failed to parse message",
+                   reason: {:cobs, "Offset byte specifies more bytes than available"}
+                 }
+               ]
+             } =
+               PPNet.parse(payload)
+    end
+
+    test "parse/1 with invalid list returns error" do
+      # kind must be a binary string, not an integer
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
+               SingleCounter.parse([123, 42, 0, 1500])
+
+      # pulses must be integer, not string
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
+               SingleCounter.parse(["bar", 42, "many", 1500])
     end
   end
 end
