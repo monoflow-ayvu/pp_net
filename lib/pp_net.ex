@@ -27,9 +27,11 @@ defmodule PPNet do
       ...>   kind: "bar",
       ...>   value: 42,
       ...>   pulses: 0,
-      ...>   duration_ms: 1500
+      ...>   duration_ms: 1500,
+      ...>   datetime: ~U[2026-03-27 12:58:06Z]
       ...> } |> PPNet.encode_message()
-      <<8, 2, 148, 163, 98, 97, 114, 42, 12, 205, 5, 220, 232, 99, 255, 179, 77, 7, 33, 214, 0>>
+      <<8, 2, 149, 163, 98, 97, 114, 42, 17, 205, 5, 220, 206, 105, 198, 126, 222, 52,
+        64, 141, 44, 85, 238, 249, 45, 0>>
 
       iex> %PPNet.Message.Ping{
       ...>   session_id: "5388724c-457e-4332-a98c-e67b2053662c",
@@ -190,8 +192,8 @@ defmodule PPNet do
   # Reed-Solomon is limited to 255 bytes inclusive
   # Cops is limited to 255 bytes exclusive
   @limit 254
-  # Minimun chunk size is 17 bytes because this is the size of ChunkedMessageHeader
-  @min_chunk_size 17
+  # Minimun chunk size is 22 bytes because this is the size of ChunkedMessageHeader
+  @min_chunk_size 22
 
   @delimiter <<0>>
 
@@ -253,7 +255,7 @@ defmodule PPNet do
   # credo:disable-for-next-line
   defp encode_chunked_message(binary, module, opts) do
     limit = get_limit(opts)
-    # type (1 byte) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (1 byte)
+    # type (1 byte) + transaction_id (4 bytes) + chunk_index (2 bytes) + chunk_size (1 byte)
     # + ReedSolomon overhead (8 bytes) + COBS overhead (1 byte) + separator (1 byte)
     chunk_header_size = 18
     chunk_size = limit - chunk_header_size
