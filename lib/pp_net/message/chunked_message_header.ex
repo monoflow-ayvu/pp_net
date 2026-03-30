@@ -89,7 +89,7 @@ defmodule PPNet.Message.ChunkedMessageHeader do
     {:ok, message}
   end
 
-  def parse(data) when is_list(data) do
+  def parse(data) do
     {:error,
      %ParseError{
        message: "The message body does not match the expected format",
