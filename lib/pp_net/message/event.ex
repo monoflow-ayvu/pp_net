@@ -38,6 +38,9 @@ defmodule PPNet.Message.Event do
   def type_code, do: @type_code
 
   @impl true
+  def datetime(%__MODULE__{datetime: datetime}), do: datetime
+
+  @impl true
   def pack(%__MODULE__{kind: kind, data: data, datetime: %DateTime{} = datetime})
       when kind in @valid_event_kinds and is_map(data) do
     Msgpax.pack!(

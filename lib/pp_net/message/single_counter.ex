@@ -38,6 +38,9 @@ defmodule PPNet.Message.SingleCounter do
   def type_code, do: @type_code
 
   @impl true
+  def datetime(%__MODULE__{datetime: datetime}), do: datetime
+
+  @impl true
   def pack(%__MODULE__{
         kind: kind,
         value: value,

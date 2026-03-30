@@ -379,7 +379,7 @@ defmodule PpnetEncodeTest do
                    message_module: Image,
                    transaction_id: transaction_id,
                    datetime: %DateTime{},
-                   total_chunks: 150
+                   total_chunks: 153
                  } = decoded_header
                ],
                errors: []
@@ -428,7 +428,7 @@ defmodule PpnetEncodeTest do
                  %ChunkedMessageHeader{
                    message_module: Image,
                    transaction_id: transaction_id,
-                   total_chunks: 116
+                   total_chunks: 118
                  } = header
                  | chunks
                ]
@@ -479,6 +479,7 @@ defmodule PpnetEncodeTest do
       assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
                ChunkedMessageBody.pack(%ChunkedMessageBody{
                  transaction_id: -1,
+                 datetime: DateTime.utc_now(),
                  chunk_index: 0,
                  chunk_size: 5,
                  chunk_data: "hello"
@@ -488,6 +489,7 @@ defmodule PpnetEncodeTest do
       assert {:error, %PPNet.PackError{}} =
                ChunkedMessageBody.pack(%ChunkedMessageBody{
                  transaction_id: 0,
+                 datetime: DateTime.utc_now(),
                  chunk_index: 0,
                  chunk_size: 100,
                  chunk_data: "hi"

@@ -253,19 +253,18 @@ defmodule PPNet do
       |> Cobs.encode!()
       |> Kernel.<>(@delimiter)
     else
-      encode_chunked_message(packaged_data, module, opts)
+      encode_chunked_message(packaged_data, module.datetime(message), module, opts)
     end
   end
 
   # credo:disable-for-next-line
-  defp encode_chunked_message(binary, module, opts) do
+  defp encode_chunked_message(binary, datetime, module, opts) do
     limit = get_limit(opts)
-    # type (1 byte) + transaction_id (4 bytes) + chunk_index (2 bytes) + chunk_size (1 byte)
+    # type (1 byte) + transaction_id (4 bytes) + datetime (4 bytes) + chunk_index (2 bytes) + chunk_size (1 byte)
     # + ReedSolomon overhead (8 bytes) + COBS overhead (1 byte) + separator (1 byte)
-    chunk_header_size = 18
+    chunk_header_size = 22
     chunk_size = limit - chunk_header_size
     transaction_id = transaction_id()
-    datetime = DateTime.utc_now()
 
     chunks =
       binary
@@ -286,6 +285,7 @@ defmodule PPNet do
       for {chunk, index} <- Enum.with_index(chunks) do
         %ChunkedMessageBody{
           transaction_id: transaction_id,
+          datetime: datetime,
           chunk_index: index,
           chunk_size: byte_size(chunk),
           chunk_data: chunk

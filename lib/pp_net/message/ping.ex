@@ -52,6 +52,9 @@ defmodule PPNet.Message.Ping do
   @impl true
   def type_code, do: @type_code
 
+  @impl true
+  def datetime(%__MODULE__{datetime: datetime}), do: datetime
+
   defguardp is_valid_location(lat, lon, accuracy)
             when is_float(lat) and is_float(lon) and is_integer(accuracy)
 

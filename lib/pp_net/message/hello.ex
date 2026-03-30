@@ -65,6 +65,9 @@ defmodule PPNet.Message.Hello do
   def type_code, do: @type_code
 
   @impl true
+  def datetime(%__MODULE__{datetime: datetime}), do: datetime
+
+  @impl true
   def pack(%__MODULE__{
         unique_id: unique_id,
         board_identifier: board_identifier,

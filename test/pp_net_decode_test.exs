@@ -466,8 +466,8 @@ defmodule PPNetTest do
                  %ChunkedMessageHeader{
                    message_module: Image,
                    transaction_id: transaction_id,
-                   total_chunks: 150,
-                   datetime: %DateTime{}
+                   total_chunks: 153,
+                   datetime: datetime
                  }
                  | chunks
                ],
@@ -483,7 +483,8 @@ defmodule PPNetTest do
                  chunk_data: chunk_data,
                  chunk_size: chunk_size,
                  chunk_index: chunk_index,
-                 transaction_id: ^transaction_id
+                 transaction_id: ^transaction_id,
+                 datetime: ^datetime
                } = chunk
 
                assert is_integer(transaction_id)
@@ -600,6 +601,7 @@ defmodule PPNetTest do
       # chunk_data is garbage — Hello.parse will fail on reassembled binary
       bad_data_chunk = %ChunkedMessageBody{
         transaction_id: 1234,
+        datetime: DateTime.utc_now(),
         chunk_index: 0,
         chunk_size: 3,
         chunk_data: <<0xFF, 0xFE, 0xFD>>

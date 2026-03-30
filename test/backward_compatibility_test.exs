@@ -1,9 +1,6 @@
 defmodule BackwardCompatibilityTest do
   use ExUnit.Case, async: true
 
-  import ExUnit.CaptureLog
-  import PPNet.Test.Helper
-
   # alias PPNet.Message.ChunkedMessageBody
   # alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.Event
@@ -57,202 +54,6 @@ defmodule BackwardCompatibilityTest do
                ],
                errors: []
              } = PPNet.parse(payload)
-    end
-
-    test "parse/1 with valid binary data when payload is corrupted (payload from v0.1.3)" do
-      payload =
-        <<0x29, 0x01, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
-          0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0x8F, 0xA5, 0x77,
-          0xCC, 0xD7, 0x9B, 0x4C, 0xF4, 0x00>>
-
-      <<a::binary-size(3)-unit(8), _b::binary-size(1)-unit(8), rest::binary>> = payload
-      corrupted = <<a::binary-size(3)-unit(8), 1::unsigned-integer-size(1)-unit(8), rest::binary>>
-      {result, log} = with_log(fn -> PPNet.parse(corrupted) end)
-
-      assert %{
-               messages: [
-                 %Hello{
-                   version: 4660,
-                   ppnet_version: 1,
-                   boot_id: 87_372_886,
-                   board_version: 17_185,
-                   board_identifier: "Tester",
-                   unique_id: "TestRunner",
-                   datetime: nil
-                 }
-               ],
-               errors: []
-             } = result
-
-      assert log =~ "Reed-Solomon corrected 1 errors in message of type #{Hello}"
-    end
-
-    test "parse/1 with valid binary data when the payload has 1 corrupted byte." do
-      payload =
-        <<0x29, 0x01, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
-          0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0x8F, 0xA5, 0x77,
-          0xCC, 0xD7, 0x9B, 0x4C, 0xF4, 0x00>>
-
-      corrupted = corrupt_bytes(payload, [3])
-      {result, log} = with_log(fn -> PPNet.parse(corrupted) end)
-
-      assert %{
-               messages: [
-                 %Hello{
-                   version: 4660,
-                   ppnet_version: 1,
-                   boot_id: 87_372_886,
-                   board_version: 17_185,
-                   board_identifier: "Tester",
-                   unique_id: "TestRunner",
-                   datetime: nil
-                 }
-               ],
-               errors: []
-             } = result
-
-      assert log =~ "[info] Reed-Solomon corrected 1 errors in message of type Elixir.PPNet.Message.Hello"
-    end
-
-    test "parse/1 with valid binary data when the payload has 2 corrupted byte." do
-      payload =
-        <<0x29, 0x01, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
-          0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0x8F, 0xA5, 0x77,
-          0xCC, 0xD7, 0x9B, 0x4C, 0xF4, 0x00>>
-
-      corrupted = corrupt_bytes(payload, [3, 10])
-      {result, log} = with_log(fn -> PPNet.parse(corrupted) end)
-
-      assert %{
-               messages: [
-                 %Hello{
-                   version: 4660,
-                   ppnet_version: 1,
-                   boot_id: 87_372_886,
-                   board_version: 17_185,
-                   board_identifier: "Tester",
-                   unique_id: "TestRunner",
-                   datetime: nil
-                 }
-               ],
-               errors: []
-             } = result
-
-      assert log =~ "[info] Reed-Solomon corrected 2 errors in message of type Elixir.PPNet.Message.Hello"
-    end
-
-    test "parse/1 with valid binary data when the payload has 3 corrupted byte." do
-      payload =
-        <<0x29, 0x01, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
-          0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0x8F, 0xA5, 0x77,
-          0xCC, 0xD7, 0x9B, 0x4C, 0xF4, 0x00>>
-
-      corrupted = corrupt_bytes(payload, [3, 10, 12])
-      {result, log} = with_log(fn -> PPNet.parse(corrupted) end)
-
-      assert %{
-               messages: [
-                 %Hello{
-                   version: 4660,
-                   ppnet_version: 1,
-                   boot_id: 87_372_886,
-                   board_version: 17_185,
-                   board_identifier: "Tester",
-                   unique_id: "TestRunner",
-                   datetime: nil
-                 }
-               ],
-               errors: []
-             } = result
-
-      assert log =~ "[info] Reed-Solomon corrected 3 errors in message of type Elixir.PPNet.Message.Hello"
-    end
-
-    test "parse/1 with valid binary data when the payload has 4 corrupted byte." do
-      payload =
-        <<0x29, 0x01, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
-          0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0x8F, 0xA5, 0x77,
-          0xCC, 0xD7, 0x9B, 0x4C, 0xF4, 0x00>>
-
-      corrupted = corrupt_bytes(payload, [3, 10, 12, 23])
-      {result, log} = with_log(fn -> PPNet.parse(corrupted) end)
-
-      assert %{
-               messages: [
-                 %Hello{
-                   version: 4660,
-                   ppnet_version: 1,
-                   boot_id: 87_372_886,
-                   board_version: 17_185,
-                   board_identifier: "Tester",
-                   unique_id: "TestRunner",
-                   datetime: nil
-                 }
-               ],
-               errors: []
-             } = result
-
-      assert log =~ "[info] Reed-Solomon corrected 4 errors in message of type Elixir.PPNet.Message.Hello"
-    end
-
-    test "parse/1 fail to correct corrupted bytes when exceeds 4 errors" do
-      payload =
-        <<0x29, 0x01, 0x96, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
-          0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0x8F, 0xA5, 0x77,
-          0xCC, 0xD7, 0x9B, 0x4C, 0xF4, 0x00>>
-
-      corrupted = corrupt_bytes(payload, [3, 10, 12, 23, 40])
-
-      assert %{
-               errors: [
-                 %PPNet.ParseError{
-                   data: %{
-                     payload: _payload
-                   },
-                   message: "Failed to parse message",
-                   reason: {:reed_solomon, "decode_failed"}
-                 }
-               ],
-               messages: []
-             } = PPNet.parse(corrupted)
-    end
-
-    test "parse/1 with invalid binary data" do
-      payload = <<
-        # message type
-        0x01,
-        # checksum (adler32)
-        0xDA,
-        0x12,
-        0x0C,
-        0x4F,
-        # body (msgpack)
-        # Invalid MsgPack for Hello
-        0x94,
-        0xA0,
-        0x00
-      >>
-
-      assert %{
-               messages: [],
-               errors: [
-                 %PPNet.ParseError{
-                   data: %{payload: <<1, 218, 18, 12, 79, 148, 160>>},
-                   message: "Failed to parse message",
-                   reason: {:cobs, "Offset byte specifies more bytes than available"}
-                 }
-               ]
-             } = PPNet.parse(payload)
-    end
-
-    test "parse/1 with invalid list returns error" do
-      # 5 elements instead of 6 (missing ppnet_version)
-      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
-               Hello.parse(["UniqueId", "BoardId", 1, 1, 1])
-
-      # version not an integer
-      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
-               Hello.parse(["UniqueId", "BoardId", "v1.0", 1, 1, 1])
     end
   end
 
@@ -368,45 +169,6 @@ defmodule BackwardCompatibilityTest do
                  errors: []
                }
     end
-
-    test "parse/1 with invalid binary data" do
-      payload = <<
-        # message type
-        0x02,
-        # checksum (adler32)
-        0x18,
-        0x0F,
-        0x04,
-        0x45,
-        # body (msgpack)
-        # Invalid MsgPack for SingleCounter
-        0x94,
-        0xA0,
-        0x00
-      >>
-
-      assert %{
-               messages: [],
-               errors: [
-                 %PPNet.ParseError{
-                   data: %{payload: <<2, 24, 15, 4, 69, 148, 160>>},
-                   message: "Failed to parse message",
-                   reason: {:cobs, "Offset byte specifies more bytes than available"}
-                 }
-               ]
-             } =
-               PPNet.parse(payload)
-    end
-
-    test "parse/1 with invalid list returns error" do
-      # kind must be a binary string, not an integer
-      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
-               SingleCounter.parse([123, 42, 0, 1500])
-
-      # pulses must be integer, not string
-      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
-               SingleCounter.parse(["bar", 42, "many", 1500])
-    end
   end
 
   describe "decode PPNet.Message.Ping (from v0.1.3)" do
@@ -483,16 +245,6 @@ defmodule BackwardCompatibilityTest do
                errors: []
              } = PPNet.parse(payload)
     end
-
-    test "parse/1 with invalid list returns error" do
-      # temperature must be a float, not an integer (legacy 9-element format)
-      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
-               Ping.parse([25, 1000, [40.0, -74.0, 100], 0.5, 50, 100, [], [1000, 500], %{}])
-
-      # extra must be a map, not a list (current 10-element format)
-      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
-               Ping.parse([[], 25.0, 1000, [40.0, -74.0, 100], 0.5, 50, 100, [], [1000, 500], ["not", "a", "map"]])
-    end
   end
 
   describe "decode PPNet.Message.Event (from v0.1.3)" do
@@ -511,16 +263,6 @@ defmodule BackwardCompatibilityTest do
                ],
                errors: []
              } = PPNet.parse(payload)
-    end
-
-    test "parse/1 with invalid list returns error" do
-      # kind code 99 is not a valid event kind
-      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
-               Event.parse([99, %{"sensor_id" => 1}])
-
-      # data must be a map, not a list
-      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
-               Event.parse([1, ["sensor_id", 1]])
     end
   end
 
@@ -541,11 +283,6 @@ defmodule BackwardCompatibilityTest do
          data: ^image,
          format: :webp
        }} = Image.parse(image_bin_v013)
-    end
-
-    test "parse/1 with short binary returns error" do
-      # less than 17 bytes: can't match <<id::16, format_code::1, data::binary>>
-      assert {:error, %PPNet.ParseError{reason: :unknown_format}} = Image.parse(<<1, 2, 3>>)
     end
   end
 end

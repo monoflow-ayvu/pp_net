@@ -36,6 +36,7 @@ defmodule PPNet.Message.ChunkedMessageBody do
     """
 
     field(:transaction_id, non_neg_integer(), enforce: true)
+    field(:datetime, DateTime.t(), enforce: true)
     field(:chunk_index, non_neg_integer(), enforce: true)
     field(:chunk_size, non_neg_integer(), enforce: true)
     field(:chunk_data, binary(), enforce: true)
@@ -45,8 +46,12 @@ defmodule PPNet.Message.ChunkedMessageBody do
   def type_code, do: @type_code
 
   @impl true
+  def datetime(%__MODULE__{datetime: datetime}), do: datetime
+
+  @impl true
   def pack(%__MODULE__{
         transaction_id: transaction_id,
+        datetime: %DateTime{} = datetime,
         chunk_index: chunk_index,
         chunk_size: chunk_size,
         chunk_data: chunk_data
@@ -55,6 +60,7 @@ defmodule PPNet.Message.ChunkedMessageBody do
              chunk_size <= 254 and is_binary(chunk_data) do
     <<
       transaction_id::unsigned-integer-size(4)-unit(8),
+      DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
       chunk_index::unsigned-integer-size(2)-unit(8),
       chunk_size::unsigned-integer-size(1)-unit(8),
       chunk_data::binary-size(chunk_size)-unit(8)
@@ -70,11 +76,13 @@ defmodule PPNet.Message.ChunkedMessageBody do
 
   @impl true
   def parse(
-        <<transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(2)-unit(8),
-          chunk_size::unsigned-integer-size(1)-unit(8), chunk_data::binary-size(chunk_size)-unit(8)>>
+        <<transaction_id::unsigned-integer-size(4)-unit(8), datetime::unsigned-integer-size(4)-unit(8),
+          chunk_index::unsigned-integer-size(2)-unit(8), chunk_size::unsigned-integer-size(1)-unit(8),
+          chunk_data::binary-size(chunk_size)-unit(8)>>
       ) do
     message = %ChunkedMessageBody{
       transaction_id: transaction_id,
+      datetime: DateTime.from_unix!(datetime),
       chunk_index: chunk_index,
       chunk_size: chunk_size,
       chunk_data: chunk_data
@@ -83,7 +91,22 @@ defmodule PPNet.Message.ChunkedMessageBody do
     {:ok, message}
   end
 
-  def parse(data) when is_list(data) do
+  def parse(
+        <<transaction_id::unsigned-integer-size(4)-unit(8), chunk_index::unsigned-integer-size(2)-unit(8),
+          chunk_size::unsigned-integer-size(1)-unit(8), chunk_data::binary-size(chunk_size)-unit(8)>>
+      ) do
+    message = %ChunkedMessageBody{
+      transaction_id: transaction_id,
+      datetime: nil,
+      chunk_index: chunk_index,
+      chunk_size: chunk_size,
+      chunk_data: chunk_data
+    }
+
+    {:ok, message}
+  end
+
+  def parse(data) do
     {:error,
      %ParseError{
        message: "The message body does not match the expected format",

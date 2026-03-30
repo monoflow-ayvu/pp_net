@@ -41,6 +41,9 @@ defmodule PPNet.Message.Image do
   def type_code, do: @type_code
 
   @impl true
+  def datetime(%__MODULE__{datetime: datetime}), do: datetime
+
+  @impl true
   def pack(%__MODULE__{id: id, format: format, data: data, datetime: %DateTime{} = datetime})
       when is_binary(id) and format in @valid_formats and is_binary(data) do
     data_size = byte_size(data)
