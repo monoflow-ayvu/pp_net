@@ -1,3 +1,4 @@
+# credo:disable-for-this-file Credo.Check.Design.DuplicatedCode
 defmodule PpnetEncodeTest do
   use ExUnit.Case, async: true
 

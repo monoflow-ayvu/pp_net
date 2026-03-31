@@ -86,6 +86,25 @@ defmodule PPNet.Message.Ping do
                    is_integer(tpu_ping_ms) and is_list(wifi) and
                    is_list(storage) and is_map(extra)
 
+  defguard is_valid_pack_input(
+             temperature,
+             uptime_ms,
+             lat,
+             lon,
+             accuracy,
+             cpu,
+             tpu_memory_percent,
+             tpu_ping_ms,
+             wifi,
+             total,
+             used,
+             extra
+           )
+           when is_float(temperature) and is_integer(uptime_ms) and is_valid_location(lat, lon, accuracy) and
+                  is_valid_cpu(cpu) and is_valid_tpu_memory(tpu_memory_percent) and is_integer(tpu_ping_ms) and
+                  is_list(wifi) and
+                  is_valid_storage(total, used) and is_map(extra) and valid_wifi_lingh(wifi)
+
   @impl true
   # credo:disable-for-lines:14
   def pack(%__MODULE__{
@@ -101,9 +120,20 @@ defmodule PPNet.Message.Ping do
         datetime: %DateTime{} = datetime,
         extra: extra
       })
-      when is_float(temperature) and is_integer(uptime_ms) and is_valid_location(lat, lon, accuracy) and
-             is_valid_cpu(cpu) and is_valid_tpu_memory(tpu_memory_percent) and is_integer(tpu_ping_ms) and is_list(wifi) and
-             is_valid_storage(total, used) and is_map(extra) and valid_wifi_lingh(wifi) do
+      when is_valid_pack_input(
+             temperature,
+             uptime_ms,
+             lat,
+             lon,
+             accuracy,
+             cpu,
+             tpu_memory_percent,
+             tpu_ping_ms,
+             wifi,
+             total,
+             used,
+             extra
+           ) do
     Msgpax.pack!(
       [
         pack_session_id(session_id),

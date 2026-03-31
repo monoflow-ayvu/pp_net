@@ -1,4 +1,5 @@
 defmodule PPNet.Test.Helper do
+  @moduledoc false
   def corrupt_bytes(payload, positions) do
     payload
     |> :binary.bin_to_list()
