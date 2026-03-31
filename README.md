@@ -27,7 +27,7 @@ Each message is encoded in two stages before being sent on the wire:
    Build the frame: `type` (1 byte) + `body` (variable). There is no separate checksum field; Reed-Solomon provides integrity.
 
 2. **Reed-Solomon**  
-   The frame is encoded with **Reed-Solomon** (4 parity bytes), allowing up to 4 corrupted bytes in the block to be corrected. Maximum block size is 255 bytes (typical RS limit in GF(2⁸)).
+   The frame is encoded with **Reed-Solomon** (8 parity bytes), allowing up to 4 corrupted bytes in the block to be corrected. Maximum block size is 255 bytes (typical RS limit in GF(2⁸)).
 
 3. **COBS**  
    The result is encoded with **COBS** (_Consistent Overhead Byte Stuffing_): the byte `0x00` is reserved as the frame delimiter, and the payload is escaped so it never contains `0x00`. Frames can thus be delimited reliably in a stream.
@@ -40,7 +40,7 @@ Each message is encoded in two stages before being sent on the wire:
 | Step   | Encode           | Decode          |
 | ------ | ---------------- | --------------- |
 | Frame  | type + body      | —               |
-| RS     | + 4 parity bytes | correction      |
+| RS     | + 8 parity bytes | correction      |
 | COBS   | byte stuffing    | unstuff         |
 | Stream | …payload…`0x00`  | split by `0x00` |
 
@@ -53,7 +53,7 @@ All messages share the same logical layout before COBS:
 | type  | uint8  | 1        |
 | body  | binary | variable |
 
-The full block (type + body) is protected by 4 Reed-Solomon parity bytes.
+The full block (type + body) is protected by 8 Reed-Solomon parity bytes.
 
 ---
 
