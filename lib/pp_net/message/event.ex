@@ -43,6 +43,8 @@ defmodule PPNet.Message.Event do
   @impl true
   def pack(%__MODULE__{kind: kind, data: data, datetime: %DateTime{} = datetime})
       when kind in @valid_event_kinds and is_map(data) do
+    verify_data!(data)
+
     Msgpax.pack!(
       [@event_kind_to_code[kind], data, DateTime.to_unix(datetime)],
       iodata: false
@@ -80,4 +82,18 @@ defmodule PPNet.Message.Event do
        data: {:unpacked_body, unpacked_body}
      }}
   end
+
+  defp verify_data!(data) when is_map(data) do
+    Enum.each(data, fn {_k, v} -> verify_data!(v) end)
+  end
+
+  defp verify_data!(data) when is_list(data) do
+    Enum.each(data, &verify_data!/1)
+  end
+
+  defp verify_data!(data) when is_binary(data) do
+    if not String.valid?(data), do: raise("Invalid value: #{inspect(data)}")
+  end
+
+  defp verify_data!(_data), do: :ok
 end

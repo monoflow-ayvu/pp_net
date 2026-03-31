@@ -355,6 +355,42 @@ defmodule PpnetEncodeTest do
       assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
                Event.pack(%Event{kind: :detection, data: ["not", "a", "map"], datetime: DateTime.utc_now()})
     end
+
+    test "pack/1 accepts data with valid UTF-8 string values" do
+      assert is_binary(
+               Event.pack(%Event{kind: :detection, data: %{"label" => "valid string"}, datetime: DateTime.utc_now()})
+             )
+    end
+
+    test "pack/1 returns error when data contains invalid binary" do
+      invalid_binary = <<0xFF, 0xFE>>
+
+      assert {:error, %PPNet.PackError{}} =
+               Event.pack(%Event{kind: :detection, data: %{"label" => invalid_binary}, datetime: DateTime.utc_now()})
+    end
+
+    test "pack/1 returns error when nested list contains invalid binary" do
+      invalid_binary = <<0xFF, 0xFE>>
+      refute String.valid?(invalid_binary)
+
+      assert {:error, %PPNet.PackError{}} =
+               Event.pack(%Event{
+                 kind: :detection,
+                 data: %{"items" => ["valid", invalid_binary]},
+                 datetime: DateTime.utc_now()
+               })
+    end
+
+    test "pack/1 returns error when nested map contains invalid binary" do
+      invalid_binary = <<0xFF, 0xFE>>
+
+      assert {:error, %PPNet.PackError{}} =
+               Event.pack(%Event{
+                 kind: :detection,
+                 data: %{"nested" => %{"label" => invalid_binary}},
+                 datetime: DateTime.utc_now()
+               })
+    end
   end
 
   describe "encode image" do
@@ -585,7 +621,9 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 18:46:39Z]
       }
 
-      assert byte_size(PPNet.encode_message(message)) == 229
+      encoded = PPNet.encode_message(message)
+      assert is_binary(encoded)
+      assert byte_size(encoded) == 229
     end
   end
 end
