@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-03-31
+
+### Added
+
+- `datetime` field to all message types: Hello, SingleCounter, Ping, Event, Image, ChunkedMessageHeader, and ChunkedMessageBody
+- Backward compatibility for all old formats — messages without `datetime` are still accepted; `datetime` will be `nil`
+- UTF-8 validation in `Event` data before packing
+- `is_valid_pack_input` guard in `Ping`
+
+### Changed
+
+- Minimum chunk size increased from 17 to 22 bytes to account for the `datetime` field in `ChunkedMessageHeader`
+- Corrected Reed-Solomon parity byte count in documentation (8, not 4)
+
 ## [0.1.3] - 2026-03-19
 
 ### Added
@@ -42,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chunked message support
 - Protocol encoding and parsing
 
+[0.1.4]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/monoflow-ayvu/pp_net/compare/0.1.0...v0.1.1
