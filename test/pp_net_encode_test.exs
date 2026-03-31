@@ -120,9 +120,9 @@ defmodule PpnetEncodeTest do
       assert PPNet.encode_message(message, limit: 9999) == PPNet.encode_message(message)
     end
 
-    test "encode_message/2 with limit below minimum clamps to 17" do
+    test "encode_message/2 with limit below minimum clamps to 22" do
       message = %SingleCounter{kind: "a", value: 0, pulses: 0, duration_ms: 0, datetime: DateTime.utc_now()}
-      assert PPNet.encode_message(message, limit: 5) == PPNet.encode_message(message, limit: 17)
+      assert PPNet.encode_message(message, limit: 5) == PPNet.encode_message(message, limit: 22)
     end
   end
 
