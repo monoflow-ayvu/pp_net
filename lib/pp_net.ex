@@ -155,7 +155,7 @@ defmodule PPNet do
   ## Limitations
 
   * Maximum frame size: **254 bytes** (COBS limit). Larger messages are automatically chunked.
-  * Minimum chunk size: **17 bytes** — the encoded size of a `ChunkedMessageHeader` frame. Going
+  * Minimum chunk size: **22 bytes** — the encoded size of a `ChunkedMessageHeader` frame. Going
     below this would cause the header itself to be chunked, which is not supported.
   * Reed-Solomon can correct up to **4 corrupted bytes** per frame (8 parity bytes, GF(2⁸)).
 
@@ -229,8 +229,8 @@ defmodule PPNet do
 
   ## Options
 
-  * `:limit` - Maximum frame size in bytes. Defaults to 254. Clamped to the range `17..254`.
-    The minimum of 17 matches the encoded size of a `ChunkedMessageHeader` frame — going below
+  * `:limit` - Maximum frame size in bytes. Defaults to 254. Clamped to the range `22..254`.
+    The minimum of 22 matches the encoded size of a `ChunkedMessageHeader` frame — going below
     that would cause the header itself to be chunked. 254 is the COBS limit.
   """
   def encode_message(%module{} = message, opts \\ []) do
