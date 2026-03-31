@@ -7,5 +7,6 @@ defmodule PPNet.Message do
 
   @callback pack(message :: struct()) :: binary()
   @callback parse(data :: binary()) :: {:ok, struct()} | {:error, %ParseError{}}
+  @callback datetime(message :: struct()) :: DateTime.t()
   @callback type_code() :: non_neg_integer()
 end

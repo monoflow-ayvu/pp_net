@@ -16,19 +16,22 @@ defmodule PPNet do
       ...>   version: 4660,
       ...>   board_version: 17_185,
       ...>   boot_id: 87_372_886,
-      ...>   ppnet_version: 1
+      ...>   ppnet_version: 1,
+      ...>   datetime: ~U[2026-03-26 21:00:55.352750Z]
       ...> } |> PPNet.encode_message()
-      <<41, 1, 150, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101,
-        115, 116, 101, 114, 205, 18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 1, 143, 165,
-        119, 204, 215, 155, 76, 244, 0>>
+      <<46, 1, 151, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101,
+        115, 116, 101, 114, 205, 18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 1, 206, 105,
+        197, 158, 135, 37, 216, 194, 76, 126, 139, 15, 150, 0>>
 
       iex> %PPNet.Message.SingleCounter{
       ...>   kind: "bar",
       ...>   value: 42,
       ...>   pulses: 0,
-      ...>   duration_ms: 1500
+      ...>   duration_ms: 1500,
+      ...>   datetime: ~U[2026-03-27 12:58:06Z]
       ...> } |> PPNet.encode_message()
-      <<8, 2, 148, 163, 98, 97, 114, 42, 12, 205, 5, 220, 232, 99, 255, 179, 77, 7, 33, 214, 0>>
+      <<8, 2, 149, 163, 98, 97, 114, 42, 17, 205, 5, 220, 206, 105, 198, 126, 222, 52,
+        64, 141, 44, 85, 238, 249, 45, 0>>
 
       iex> %PPNet.Message.Ping{
       ...>   session_id: "5388724c-457e-4332-a98c-e67b2053662c",
@@ -39,21 +42,24 @@ defmodule PPNet do
       ...>   tpu_memory_percent: 50,
       ...>   tpu_ping_ms: 100,
       ...>   wifi: [%{mac: "00:1A:2B:3C:4D:5E", rssi: -42}],
+      ...>   datetime: ~U[2026-03-27 16:25:12Z],
       ...>   storage: %{total: 512_000, used: 128_000}
       ...> } |> PPNet.encode_message()
-      <<4, 3, 154, 220, 25, 16, 83, 204, 136, 114, 76, 69, 126, 67, 50, 204, 169, 204,
+      <<4, 3, 155, 220, 25, 16, 83, 204, 136, 114, 76, 69, 126, 67, 50, 204, 169, 204,
         140, 204, 230, 123, 32, 83, 102, 44, 203, 64, 57, 1, 1, 1, 1, 1, 2, 206, 29,
         54, 238, 128, 147, 203, 64, 68, 91, 61, 7, 200, 75, 94, 203, 192, 82, 128, 98,
         77, 210, 241, 170, 205, 39, 16, 203, 63, 224, 1, 1, 1, 1, 1, 5, 50, 100, 145,
-        167, 9, 26, 43, 60, 77, 94, 214, 146, 206, 3, 7, 208, 2, 206, 3, 1, 244, 10,
-        128, 234, 62, 197, 142, 226, 20, 6, 217, 0>>
+        167, 9, 26, 43, 60, 77, 94, 214, 146, 206, 3, 7, 208, 2, 206, 3, 1, 244, 15,
+        206, 105, 198, 175, 104, 128, 140, 122, 226, 25, 11, 92, 136, 195, 0>>
 
       iex> %PPNet.Message.Event{
       ...>   kind: :detection,
-      ...>   data: %{"sensor_id" => 1, "value" => 100}
+      ...>   data: %{"sensor_id" => 1, "value" => 100},
+      ...>   datetime: ~U[2026-03-27 18:46:39Z]
       ...> } |> PPNet.encode_message()
-      <<31, 4, 146, 1, 130, 165, 118, 97, 108, 117, 101, 100, 169, 115, 101, 110, 115,
-        111, 114, 95, 105, 100, 1, 132, 127, 245, 70, 100, 161, 64, 158, 0>>
+      <<36, 4, 147, 1, 130, 165, 118, 97, 108, 117, 101, 100, 169, 115, 101, 110, 115,
+        111, 114, 95, 105, 100, 1, 206, 105, 198, 208, 143, 218, 29, 196, 116, 1, 118,
+        175, 195, 0>>
 
   Event can also be chunked when the data payload is large:
 
@@ -68,12 +74,13 @@ defmodule PPNet do
       iex> image = %PPNet.Message.Image{
       ...>   id: "00000000-0000-0000-0000-000000000000",
       ...>   data: image_data,
-      ...>   format: :webp
+      ...>   format: :webp,
+      ...>   datetime: ~U[2026-03-27 20:15:41Z]
       ...> }
       iex> [header_bin | chunks_bin] = PPNet.encode_message(image)
       iex> %{messages: [header | chunks], errors: []} = PPNet.parse([header_bin | chunks_bin])
       iex> PPNet.chunked_to_message([header | chunks])
-      {:ok, %PPNet.Message.Image{id: "00000000-0000-0000-0000-000000000000", format: :webp, data: image_data}}
+      {:ok, %PPNet.Message.Image{id: "00000000-0000-0000-0000-000000000000", format: :webp, data: image_data, datetime: ~U[2026-03-27 20:15:41Z]}}
 
 
   The optional `limit` parameter controls the maximum frame size in bytes (default 254).
@@ -84,7 +91,8 @@ defmodule PPNet do
       ...>   %PPNet.Message.Image{
       ...>     id: "00000000-0000-0000-0000-000000000000",
       ...>     data: image_data,
-      ...>     format: :webp
+      ...>     format: :webp,
+      ...>     datetime: ~U[2026-03-27 20:15:41Z]
       ...>   },
       ...>   limit: 100
       ...> )
@@ -116,7 +124,8 @@ defmodule PPNet do
       ...>   version: 4660,
       ...>   board_version: 17_185,
       ...>   boot_id: 87_372_886,
-      ...>   ppnet_version: 1
+      ...>   ppnet_version: 1,
+      ...>   datetime: ~U[2026-03-26 21:00:55Z]
       ...> }
       iex> hello |> PPNet.encode_message() |> PPNet.parse() |> Map.get(:messages) |> hd() == hello
       true
@@ -146,7 +155,7 @@ defmodule PPNet do
   ## Limitations
 
   * Maximum frame size: **254 bytes** (COBS limit). Larger messages are automatically chunked.
-  * Minimum chunk size: **17 bytes** — the encoded size of a `ChunkedMessageHeader` frame. Going
+  * Minimum chunk size: **22 bytes** — the encoded size of a `ChunkedMessageHeader` frame. Going
     below this would cause the header itself to be chunked, which is not supported.
   * Reed-Solomon can correct up to **4 corrupted bytes** per frame (8 parity bytes, GF(2⁸)).
 
@@ -188,8 +197,8 @@ defmodule PPNet do
   # Reed-Solomon is limited to 255 bytes inclusive
   # Cops is limited to 255 bytes exclusive
   @limit 254
-  # Minimun chunk size is 17 bytes because this is the size of ChunkedMessageHeader
-  @min_chunk_size 17
+  # Minimun chunk size is 22 bytes because this is the size of ChunkedMessageHeader
+  @min_chunk_size 22
 
   @delimiter <<0>>
 
@@ -220,8 +229,8 @@ defmodule PPNet do
 
   ## Options
 
-  * `:limit` - Maximum frame size in bytes. Defaults to 254. Clamped to the range `17..254`.
-    The minimum of 17 matches the encoded size of a `ChunkedMessageHeader` frame — going below
+  * `:limit` - Maximum frame size in bytes. Defaults to 254. Clamped to the range `22..254`.
+    The minimum of 22 matches the encoded size of a `ChunkedMessageHeader` frame — going below
     that would cause the header itself to be chunked. 254 is the COBS limit.
   """
   def encode_message(%module{} = message, opts \\ []) do
@@ -244,19 +253,18 @@ defmodule PPNet do
       |> Cobs.encode!()
       |> Kernel.<>(@delimiter)
     else
-      encode_chunked_message(packaged_data, module, opts)
+      encode_chunked_message(packaged_data, module.datetime(message), module, opts)
     end
   end
 
   # credo:disable-for-next-line
-  defp encode_chunked_message(binary, module, opts) do
+  defp encode_chunked_message(binary, datetime, module, opts) do
     limit = get_limit(opts)
-    # type (1 byte) + transaction_id (4 bytes) + chunk_index (1 byte) + chunk_size (1 byte)
+    # type (1 byte) + transaction_id (4 bytes) + datetime (4 bytes) + chunk_index (2 bytes) + chunk_size (1 byte)
     # + ReedSolomon overhead (8 bytes) + COBS overhead (1 byte) + separator (1 byte)
-    chunk_header_size = 18
+    chunk_header_size = 22
     chunk_size = limit - chunk_header_size
     transaction_id = transaction_id()
-    datetime = DateTime.utc_now()
 
     chunks =
       binary
@@ -277,6 +285,7 @@ defmodule PPNet do
       for {chunk, index} <- Enum.with_index(chunks) do
         %ChunkedMessageBody{
           transaction_id: transaction_id,
+          datetime: datetime,
           chunk_index: index,
           chunk_size: byte_size(chunk),
           chunk_data: chunk

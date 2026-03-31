@@ -26,19 +26,27 @@ defmodule PPNet.Message.Event do
 
     * `kind` - The kind of event (`:detection`)
     * `data` - Arbitrary key/value payload associated with the event
+    * `datetime` - Timestamp of the event
     """
 
     field(:kind, event_kind(), enforce: true)
     field(:data, %{optional(String.t()) => any()}, enforce: true)
+    field(:datetime, DateTime.t(), enforce: true)
   end
 
   @impl true
   def type_code, do: @type_code
 
   @impl true
-  def pack(%__MODULE__{kind: kind, data: data}) when kind in @valid_event_kinds and is_map(data) do
+  def datetime(%__MODULE__{datetime: datetime}), do: datetime
+
+  @impl true
+  def pack(%__MODULE__{kind: kind, data: data, datetime: %DateTime{} = datetime})
+      when kind in @valid_event_kinds and is_map(data) do
+    verify_data!(data)
+
     Msgpax.pack!(
-      [@event_kind_to_code[kind], data],
+      [@event_kind_to_code[kind], data, DateTime.to_unix(datetime)],
       iodata: false
     )
   rescue
@@ -57,8 +65,13 @@ defmodule PPNet.Message.Event do
     end
   end
 
+  def parse([kind_code, data, datetime])
+      when kind_code in @valid_event_kind_codes and is_map(data) and is_integer(datetime) do
+    {:ok, %__MODULE__{kind: @code_to_event_kind[kind_code], data: data, datetime: DateTime.from_unix!(datetime)}}
+  end
+
   def parse([kind_code, data]) when kind_code in @valid_event_kind_codes and is_map(data) do
-    {:ok, %__MODULE__{kind: @code_to_event_kind[kind_code], data: data}}
+    {:ok, %__MODULE__{kind: @code_to_event_kind[kind_code], data: data, datetime: nil}}
   end
 
   def parse(unpacked_body) when is_list(unpacked_body) do
@@ -69,4 +82,18 @@ defmodule PPNet.Message.Event do
        data: {:unpacked_body, unpacked_body}
      }}
   end
+
+  defp verify_data!(data) when is_map(data) do
+    Enum.each(data, fn {_k, v} -> verify_data!(v) end)
+  end
+
+  defp verify_data!(data) when is_list(data) do
+    Enum.each(data, &verify_data!/1)
+  end
+
+  defp verify_data!(data) when is_binary(data) do
+    if not String.valid?(data), do: raise("Invalid value: #{inspect(data)}")
+  end
+
+  defp verify_data!(_data), do: :ok
 end

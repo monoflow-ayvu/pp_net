@@ -27,7 +27,7 @@ Each message is encoded in two stages before being sent on the wire:
    Build the frame: `type` (1 byte) + `body` (variable). There is no separate checksum field; Reed-Solomon provides integrity.
 
 2. **Reed-Solomon**  
-   The frame is encoded with **Reed-Solomon** (4 parity bytes), allowing up to 4 corrupted bytes in the block to be corrected. Maximum block size is 255 bytes (typical RS limit in GF(2⁸)).
+   The frame is encoded with **Reed-Solomon** (8 parity bytes), allowing up to 4 corrupted bytes in the block to be corrected. Maximum block size is 255 bytes (typical RS limit in GF(2⁸)).
 
 3. **COBS**  
    The result is encoded with **COBS** (_Consistent Overhead Byte Stuffing_): the byte `0x00` is reserved as the frame delimiter, and the payload is escaped so it never contains `0x00`. Frames can thus be delimited reliably in a stream.
@@ -40,7 +40,7 @@ Each message is encoded in two stages before being sent on the wire:
 | Step   | Encode           | Decode          |
 | ------ | ---------------- | --------------- |
 | Frame  | type + body      | —               |
-| RS     | + 4 parity bytes | correction      |
+| RS     | + 8 parity bytes | correction      |
 | COBS   | byte stuffing    | unstuff         |
 | Stream | …payload…`0x00`  | split by `0x00` |
 
@@ -53,7 +53,7 @@ All messages share the same logical layout before COBS:
 | type  | uint8  | 1        |
 | body  | binary | variable |
 
-The full block (type + body) is protected by 4 Reed-Solomon parity bytes.
+The full block (type + body) is protected by 8 Reed-Solomon parity bytes.
 
 ---
 
@@ -69,14 +69,17 @@ Hello (1), SingleCounter (2), Ping (3), and Event (4) use **MessagePack** for th
 
 Body: MessagePack array (fields in order).
 
-| Field            | Type    |
-| ---------------- | ------- |
-| unique_id        | string  |
-| board_identifier | string  |
-| version          | integer |
-| board_version    | integer |
-| boot_id          | integer |
-| ppnet_version    | integer |
+| Field            | Type              |
+| ---------------- | ----------------- |
+| unique_id        | string            |
+| board_identifier | string            |
+| version          | integer           |
+| board_version    | integer           |
+| boot_id          | integer           |
+| ppnet_version    | integer           |
+| datetime         | integer (Unix ts) |
+
+**Backward compatibility:** A 6-element list without `datetime` is still accepted; `datetime` will be `nil`.
 
 ---
 
@@ -84,18 +87,21 @@ Body: MessagePack array (fields in order).
 
 Body: MessagePack array.
 
-| Field       | Type    |
-| ----------- | ------- |
-| kind        | string  |
-| value       | any     |
-| pulses      | integer |
-| duration_ms | integer |
+| Field       | Type              |
+| ----------- | ----------------- |
+| kind        | string            |
+| value       | any               |
+| pulses      | integer           |
+| duration_ms | integer           |
+| datetime    | integer (Unix ts) |
+
+**Backward compatibility:** A 4-element list without `datetime` is still accepted; `datetime` will be `nil`.
 
 ---
 
 ### Type 3 — Ping
 
-Body: MessagePack array with 10 elements in order:
+Body: MessagePack array with 11 elements in order:
 
 | Field              | Type    | Validation                        | Wire format / notes                                                                                       |
 | ------------------ | ------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -108,9 +114,10 @@ Body: MessagePack array with 10 elements in order:
 | tpu_ping_ms        | integer | —                                 | TPU ping time (ms)                                                                                        |
 | wifi               | list    | max 10 entries                    | List of **7-byte binaries**: 6 bytes MAC (raw) + 1 byte RSSI (signed int8, dBm)                          |
 | storage            | list    | total/used: integer               | `[total, used]` (2 integers, kilobytes — clients must convert before sending; receivers always assume KB) |
+| datetime           | integer | —                                 | Unix timestamp (seconds)                                                                                  |
 | extra              | map     | —                                 | Optional key/value data                                                                                   |
 
-**Backward compatibility:** A 9-element list without `session_id` is still accepted; `session_id` will be `nil`.
+**Backward compatibility:** A 9-element list without `session_id` is still accepted; `session_id` will be `nil`. A 10-element list without `datetime` is still accepted; `datetime` will be `nil`.
 
 **WiFi encoding:** Each entry is 7 bytes: MAC address as 6 raw bytes (no colon-separated string), then RSSI as one signed byte. This keeps the payload small so the ping stays within a single frame.
 
@@ -118,12 +125,15 @@ Body: MessagePack array with 10 elements in order:
 
 ### Type 4 — Event
 
-Body: MessagePack array `[kind, data]`.
+Body: MessagePack array `[kind, data, datetime]`.
 
-| Field | Type    | Notes                                                                  |
-| ----- | ------- | ---------------------------------------------------------------------- |
-| kind  | integer | 1 = detection                                                          |
-| data  | map     | Example payload: `{"image_id" => <16-byte UUID binary>, "d" => [...]}` |
+| Field    | Type    | Notes                                                                  |
+| -------- | ------- | ---------------------------------------------------------------------- |
+| kind     | integer | 1 = detection                                                          |
+| data     | map     | Example payload: `{"image_id" => <16-byte UUID binary>, "d" => [...]}` |
+| datetime | integer | Unix timestamp (seconds)                                               |
+
+**Backward compatibility:** A 2-element list without `datetime` is still accepted; `datetime` will be `nil`.
 
 ---
 
@@ -131,11 +141,15 @@ Body: MessagePack array `[kind, data]`.
 
 Body: fixed header + raw image data.
 
-| Field  | Type   | Bytes                     |
-| ------ | ------ | ------------------------- |
-| id     | binary | 16 (UUIDv4)               |
-| format | uint8  | 1 (1=jpeg, 2=webp, 3=png) |
-| data   | binary | variable                  |
+| Field     | Type          | Bytes                     |
+| --------- | ------------- | ------------------------- |
+| id        | binary        | 16 (UUIDv4)               |
+| format    | uint8         | 1 (1=jpeg, 2=webp, 3=png) |
+| datetime  | uint32 (Unix) | 4                         |
+| data_size | uint32        | 4                         |
+| data      | binary        | data_size                 |
+
+**Backward compatibility:** The old format (`id` + `format` + `data` without `datetime`/`data_size`) is still accepted; `datetime` will be `nil`.
 
 When the encoded image (or any message) exceeds the channel limit, it is sent as chunked messages (types 6 and 7).
 
@@ -158,14 +172,17 @@ Used when the payload is too large for a single frame (e.g. image). The body is 
 
 ### Type 7 — ChunkedMessageBody (fragment)
 
-| Field          | Type   | Bytes      |
-| -------------- | ------ | ---------- |
-| transaction_id | uint32 | 4          |
-| chunk_index    | uint16 | 2          |
-| chunk_size     | uint8  | 1          |
-| chunk_data     | binary | chunk_size |
+| Field          | Type          | Bytes      |
+| -------------- | ------------- | ---------- |
+| transaction_id | uint32        | 4          |
+| datetime       | uint32 (Unix) | 4          |
+| chunk_index    | uint16        | 2          |
+| chunk_size     | uint8         | 1          |
+| chunk_data     | binary        | chunk_size |
 
 `chunk_size` is the length in bytes of `chunk_data`. Fragments are reassembled by `transaction_id` and ordered by `chunk_index`.
+
+**Backward compatibility:** The old format without `datetime` is still accepted; `datetime` will be `nil`.
 
 ---
 
@@ -180,7 +197,7 @@ Used when the payload is too large for a single frame (e.g. image). The body is 
 Example (chunked image):
 
 ```elixir
-image = %PPNet.Message.Image{data: raw_binary, format: :webp}
+image = %PPNet.Message.Image{data: raw_binary, format: :webp, datetime: DateTime.utc_now()}
 [header_bin | chunk_bins] = PPNet.encode_message(image, limit: 200)
 payload = [header_bin | chunk_bins] |> Enum.join()
 %{messages: [header | body_messages], errors: []} = PPNet.parse(payload)

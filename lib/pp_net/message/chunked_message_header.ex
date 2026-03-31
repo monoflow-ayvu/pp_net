@@ -47,6 +47,9 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   def type_code, do: @type_code
 
   @impl true
+  def datetime(%__MODULE__{datetime: datetime}), do: datetime
+
+  @impl true
   def pack(%__MODULE__{
         message_module: message_module,
         transaction_id: transaction_id,
@@ -86,7 +89,7 @@ defmodule PPNet.Message.ChunkedMessageHeader do
     {:ok, message}
   end
 
-  def parse(data) when is_list(data) do
+  def parse(data) do
     {:error,
      %ParseError{
        message: "The message body does not match the expected format",
