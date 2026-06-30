@@ -144,10 +144,12 @@ Body: fixed header + raw image data.
 | Field     | Type          | Bytes                     |
 | --------- | ------------- | ------------------------- |
 | id        | binary        | 16 (UUIDv4)               |
-| format    | uint8         | 1 (1=jpeg, 2=webp, 3=png) |
+| format    | uint8         | 1 (1=jpeg, 2=webp, 3=png, 4=h264) |
 | datetime  | uint32 (Unix) | 4                         |
 | data_size | uint32        | 4                         |
 | data      | binary        | data_size                 |
+
+**H.264 (`4`):** `data` must be an Annex-B byte stream — NAL units prefixed with a `00 00 01` or `00 00 00 01` start code. `pack/1` rejects other framings (e.g. AVCC/length-prefixed) with `%PPNet.PackError{reason: :not_annex_b}`.
 
 **Backward compatibility:** The old format (`id` + `format` + `data` without `datetime`/`data_size`) is still accepted; `datetime` will be `nil`.
 

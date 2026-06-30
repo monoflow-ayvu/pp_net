@@ -13,8 +13,8 @@ defmodule PPNet.Message.Image do
   @type_code 5
   @derive Jason.Encoder
 
-  @type format :: :jpeg | :webp | :png
-  @format_to_code %{jpeg: 1, webp: 2, png: 3}
+  @type format :: :jpeg | :webp | :png | :h264
+  @format_to_code %{jpeg: 1, webp: 2, png: 3, h264: 4}
   @code_to_format Map.new(@format_to_code, fn {k, v} -> {v, k} end)
   @valid_formats Map.keys(@format_to_code)
   @type uuidv4 :: String.t()
@@ -26,7 +26,9 @@ defmodule PPNet.Message.Image do
     ## Fields
 
     * `id` - UUIDv4 identifying the image
-    * `format` - Image format (`:jpeg`, `:webp`, or `:png`)
+    * `format` - Image format (`:jpeg`, `:webp`, `:png`, or `:h264`). `:h264` data
+      must be Annex-B framed (NAL units prefixed with a `00 00 01` / `00 00 00 01`
+      start code); `pack/1` rejects other framings.
     * `data` - Raw image binary
     * `datetime` - Timestamp of the image capture
     """
@@ -44,8 +46,22 @@ defmodule PPNet.Message.Image do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
-  def pack(%__MODULE__{id: id, format: format, data: data, datetime: %DateTime{} = datetime})
-      when is_binary(id) and format in @valid_formats and is_binary(data) do
+  # :h264 must be Annex-B framed: data begins with a NAL start code, 00 00 01 or 00 00 00 01.
+  def pack(%__MODULE__{format: :h264, data: <<0, 0, 1, _::binary>>} = message), do: pack_image(message)
+  def pack(%__MODULE__{format: :h264, data: <<0, 0, 0, 1, _::binary>>} = message), do: pack_image(message)
+
+  def pack(%__MODULE__{format: :h264}) do
+    {:error, %PackError{message: "H.264 data must be Annex-B framed (missing NAL start code)", reason: :not_annex_b}}
+  end
+
+  def pack(%__MODULE__{format: format} = message) when format in @valid_formats, do: pack_image(message)
+
+  def pack(_message) do
+    {:error, %PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
+  end
+
+  defp pack_image(%__MODULE__{id: id, format: format, data: data, datetime: %DateTime{} = datetime})
+       when is_binary(id) and is_binary(data) do
     data_size = byte_size(data)
 
     <<
@@ -60,7 +76,7 @@ defmodule PPNet.Message.Image do
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
   end
 
-  def pack(_message) do
+  defp pack_image(_message) do
     {:error, %PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 

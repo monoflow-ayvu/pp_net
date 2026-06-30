@@ -498,6 +498,24 @@ defmodule PPNetTest do
       # less than 17 bytes: can't match <<id::16, format_code::1, data::binary>>
       assert {:error, %PPNet.ParseError{reason: :unknown_format}} = Image.parse(<<1, 2, 3>>)
     end
+
+    test "parse/1 reassembles a chunked Annex-B H.264 image" do
+      id = UUID.uuid4()
+      # Start code + filler large enough to span several 200-byte chunks.
+      data = <<0, 0, 0, 1>> <> :binary.copy(<<0xAA>>, 500)
+
+      assert %{
+               messages: [%ChunkedMessageHeader{message_module: Image} = header | chunks],
+               errors: []
+             } =
+               %Image{id: id, data: data, format: :h264, datetime: ~U[2026-03-27 20:15:41Z]}
+               |> PPNet.encode_message(limit: 200)
+               |> Enum.join()
+               |> PPNet.parse()
+
+      assert {:ok, %Image{id: ^id, format: :h264, data: ^data}} =
+               PPNet.chunked_to_message([header | chunks])
+    end
   end
 
   describe "decode PPNet.Message.ChunkedMessageBody" do

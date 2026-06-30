@@ -508,6 +508,33 @@ defmodule PpnetEncodeTest do
                  datetime: DateTime.utc_now()
                })
     end
+
+    test "pack/1 accepts H.264 data with a 3-byte Annex-B start code" do
+      # Only the leading start code is validated; the trailing bytes are opaque payload.
+      data = <<0, 0, 1>> <> "frame"
+
+      packed = Image.pack(%Image{id: UUID.uuid4(), format: :h264, data: data, datetime: ~U[2026-03-27 20:15:41Z]})
+
+      assert {:ok, %Image{format: :h264, data: ^data}} = Image.parse(packed)
+    end
+
+    test "pack/1 accepts H.264 data with a 4-byte Annex-B start code" do
+      data = <<0, 0, 0, 1>> <> "frame"
+
+      packed = Image.pack(%Image{id: UUID.uuid4(), format: :h264, data: data, datetime: ~U[2026-03-27 20:15:41Z]})
+
+      assert {:ok, %Image{format: :h264, data: ^data}} = Image.parse(packed)
+    end
+
+    test "pack/1 rejects H.264 data without an Annex-B start code" do
+      assert {:error, %PPNet.PackError{reason: :not_annex_b}} =
+               Image.pack(%Image{
+                 id: UUID.uuid4(),
+                 format: :h264,
+                 data: <<1, 2, 3, 4, 5>>,
+                 datetime: DateTime.utc_now()
+               })
+    end
   end
 
   describe "encode PPNet.Message.ChunkedMessageBody" do
