@@ -85,6 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chunked message support
 - Protocol encoding and parsing
 
+[0.1.6]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.1...v0.1.2
