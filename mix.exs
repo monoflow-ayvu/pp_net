@@ -35,7 +35,7 @@ defmodule PpNet.MixProject do
       {:msgpax, "~> 2.4"},
       {:jason, "~> 1.4"},
       {:cobs, "~> 0.2.0"},
-      {:reed_solomon_ex, "~> 0.1.1"},
+      {:reed_solomon_ex, "~> 0.2.0"},
       {:elixir_uuid, "~> 1.2"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:quokka, "~> 2.11", only: [:dev, :test], runtime: false},
