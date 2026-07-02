@@ -596,7 +596,7 @@ defmodule PPNetTest do
                  %PPNet.ParseError{
                    data: %{payload: ""},
                    message: "Failed to parse message",
-                   reason: {:reed_solomon, %ErlangError{original: :nif_panicked, reason: nil}}
+                   reason: {:reed_solomon, "codeword shorter than parity"}
                  },
                  %PPNet.ParseError{
                    data: %{payload: <<24, 15, 4, 69, 148, 160>>},
