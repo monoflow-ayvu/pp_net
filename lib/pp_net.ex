@@ -99,6 +99,15 @@ defmodule PPNet do
       iex> Enum.all?(chunks, &(byte_size(&1) <= 100))
       true
 
+  On memory-constrained targets, `encode_message_stream/2` produces the same frames as a
+  lazy enumerable, so a large chunked message can be fed to the transport one frame at a
+  time without materializing the whole `[header_binary | chunk_binaries]` list:
+
+      message
+      |> PPNet.encode_message_stream()
+      |> Stream.each(&Transport.send_frame/1)
+      |> Stream.run()
+
   ## Parsing
 
   `parse/1` accepts a binary or iodata and returns `%{messages: [...], errors: [...]}`.
@@ -199,6 +208,10 @@ defmodule PPNet do
   @limit 254
   # Minimun chunk size is 22 bytes because this is the size of ChunkedMessageHeader
   @min_chunk_size 22
+  # Per-chunk overhead: type (1 byte) + transaction_id (4 bytes) + datetime (4 bytes)
+  # + chunk_index (2 bytes) + chunk_size (1 byte) + Reed-Solomon overhead (8 bytes)
+  # + COBS overhead (1 byte) + separator (1 byte)
+  @chunk_header_size 22
 
   @delimiter <<0>>
 
@@ -238,41 +251,63 @@ defmodule PPNet do
 
     packaged_data = module.pack(message)
 
-    # type (1 byte) + packaged_data + Reed-Solomon overhead (8 bytes) + COBS overhead (1 byte) + separator (1 byte)
-    total_size = 1 + byte_size(packaged_data) + 8 + 1 + 1
-
-    if total_size <= limit do
-      message = <<
-        module.type_code()::unsigned-integer-size(1)-unit(8),
-        packaged_data::binary-size(byte_size(packaged_data))-unit(8)
-      >>
-
-      {:ok, rs_encoded} = ReedSolomonEx.encode(message, 8)
-
-      rs_encoded
-      |> Cobs.encode!()
-      |> Kernel.<>(@delimiter)
+    if frame_size(packaged_data) <= limit do
+      encode_frame(module.type_code(), packaged_data)
     else
-      encode_chunked_message(packaged_data, module.datetime(message), module, opts)
+      packaged_data
+      |> chunked_frame_stream(module.datetime(message), module, opts)
+      |> Enum.to_list()
     end
   end
 
-  # credo:disable-for-next-line
-  defp encode_chunked_message(binary, datetime, module, opts) do
+  @doc """
+  Like `encode_message/2`, but returns the encoded frames as a lazy `Enumerable`
+  instead of a fully materialized list.
+
+  A message that fits in a single frame yields exactly that frame; a chunked message
+  yields the `ChunkedMessageHeader` frame followed by one frame per chunk, encoded on
+  demand. Feeding the stream straight into a transport (e.g. a chunked HTTP body)
+  keeps peak memory at O(chunk size) instead of O(payload).
+
+  Accepts the same options as `encode_message/2`.
+  """
+  def encode_message_stream(%module{} = message, opts \\ []) do
     limit = get_limit(opts)
-    # type (1 byte) + transaction_id (4 bytes) + datetime (4 bytes) + chunk_index (2 bytes) + chunk_size (1 byte)
-    # + ReedSolomon overhead (8 bytes) + COBS overhead (1 byte) + separator (1 byte)
-    chunk_header_size = 22
-    chunk_size = limit - chunk_header_size
+
+    packaged_data = module.pack(message)
+
+    if frame_size(packaged_data) <= limit do
+      [encode_frame(module.type_code(), packaged_data)]
+    else
+      chunked_frame_stream(packaged_data, module.datetime(message), module, opts)
+    end
+  end
+
+  # type (1 byte) + packaged_data + Reed-Solomon overhead (8 bytes) + COBS overhead (1 byte) + separator (1 byte)
+  defp frame_size(packaged_data), do: 1 + byte_size(packaged_data) + 8 + 1 + 1
+
+  defp encode_frame(type_code, packaged_data) do
+    message = <<
+      type_code::unsigned-integer-size(1)-unit(8),
+      packaged_data::binary-size(byte_size(packaged_data))-unit(8)
+    >>
+
+    {:ok, rs_encoded} = ReedSolomonEx.encode(message, 8)
+
+    IO.iodata_to_binary([PPNet.Cobs.encode_iodata!(rs_encoded), @delimiter])
+  end
+
+  defp chunked_frame_stream(binary, datetime, module, opts) do
+    limit = get_limit(opts)
+    chunk_size = limit - @chunk_header_size
+
+    if chunk_size == 0 do
+      raise ArgumentError,
+            "limit #{limit} leaves no room for chunk data (per-chunk overhead is #{@chunk_header_size} bytes)"
+    end
+
     transaction_id = transaction_id()
-
-    chunks =
-      binary
-      |> :binary.bin_to_list()
-      |> Enum.chunk_every(chunk_size)
-      |> Enum.map(&IO.iodata_to_binary/1)
-
-    total_chunks = length(chunks)
+    total_chunks = div(byte_size(binary) + chunk_size - 1, chunk_size)
 
     header = %ChunkedMessageHeader{
       message_module: module,
@@ -281,18 +316,34 @@ defmodule PPNet do
       total_chunks: total_chunks
     }
 
-    messages =
-      for {chunk, index} <- Enum.with_index(chunks) do
-        %ChunkedMessageBody{
-          transaction_id: transaction_id,
-          datetime: datetime,
-          chunk_index: index,
-          chunk_size: byte_size(chunk),
-          chunk_data: chunk
-        }
-      end
+    bodies =
+      binary
+      |> chunk_stream(chunk_size)
+      |> Stream.with_index()
+      |> Stream.map(fn {chunk, index} ->
+        encode_message(
+          %ChunkedMessageBody{
+            transaction_id: transaction_id,
+            datetime: datetime,
+            chunk_index: index,
+            chunk_size: byte_size(chunk),
+            chunk_data: chunk
+          },
+          opts
+        )
+      end)
 
-    Enum.map([header | messages], &encode_message(&1, opts))
+    Stream.concat([encode_message(header, opts)], bodies)
+  end
+
+  # Chunks must stay sub-binaries into the payload — chunking through a byte
+  # list transiently allocates ~32x the payload size on a 64-bit BEAM.
+  defp chunk_stream(binary, chunk_size) do
+    Stream.unfold(binary, fn
+      <<>> -> nil
+      <<chunk::binary-size(chunk_size), rest::binary>> -> {chunk, rest}
+      last_chunk -> {last_chunk, <<>>}
+    end)
   end
 
   @doc """
