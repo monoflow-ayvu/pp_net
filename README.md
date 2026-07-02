@@ -192,6 +192,8 @@ Used when the payload is too large for a single frame (e.g. image). The body is 
 
 - **Encode** a message: `PPNet.encode_message(message)` returns a single binary, or a list `[header_binary | chunk_binaries]` when the message is chunked (e.g. large image). You can pass `limit: n` to force chunking when the encoded size would exceed `n` bytes (default 254).
 
+- **Encode as a stream**: `PPNet.encode_message_stream(message)` yields the same frames as a lazy `Enumerable`, so large chunked messages can be sent frame-by-frame (e.g. into a chunked HTTP body) with O(chunk size) peak memory instead of materializing the full frame list. Useful on memory-constrained targets.
+
 - **Parse** a stream: `PPNet.parse(binary)` returns `%{messages: [...], errors: [...]}`. Each element of `messages` is either a decoded message struct (Hello, Ping, etc.) or a `ChunkedMessageHeader` / `ChunkedMessageBody`. Join all frames (e.g. from a stream) and call `parse` on the concatenated binary.
 
 - **Reassemble** chunked payloads: when you have `[%ChunkedMessageHeader{} | chunks]` from `parse`, call `PPNet.chunked_to_message([header | chunks])` to get `{:ok, message}` (or `{:error, reason}`). The result is the original message type (e.g. `%Image{}`, `%Ping{}`).

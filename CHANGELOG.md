@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `PPNet.encode_message_stream/2` — returns the encoded frames as a lazy `Enumerable`, so
+  a large chunked message can be fed to a transport one frame at a time with O(chunk size)
+  peak memory instead of materializing the full `[header_binary | chunk_binaries]` list
+
+### Changed
+
+- Chunked encoding splits payloads with binary pattern matching (zero-copy sub-binaries)
+  instead of `:binary.bin_to_list/1` + `Enum.chunk_every/2`. Peak transient allocation drops
+  from ~32× the payload size to O(payload); a 1.6 MB `Image` no longer OOMs 256 MB targets.
+  Wire output is unchanged
+- COBS framing on encode uses a one-pass zero-splitting encoder (byte-identical output)
+  instead of the byte-at-a-time `Cobs.encode!/1`; `Cobs` is still used for decoding
+
+### Fixed
+
+- `encode_message/2` with a `limit` that leaves no room for chunk data (22 bytes, the clamp
+  minimum) now raises a descriptive `ArgumentError` instead of a `FunctionClauseError`
+
 ## [0.1.5] - 2026-06-30
 
 ### Added
