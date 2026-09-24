@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://json.schemastore.org/json-patch.json",
+  "definitions": {
+    "path": {
+      "description": "A JSON Pointer path.",
+      "pattern": "^#?(|(/([^/~]|~[01])*)*)$",
+      "type": "string"
+    }
+  },
+  "title": "JSON schema for JSONPatch files",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "revision", "operations"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "version of the schema"
+    },
+    "revision": {
+      "type": "integer",
+      "description": "revision of the config"
+    },
+    "operations": {
+      "type": "array",
+      "title": "JSON schema for JSONPatch files",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["value", "op", "path"],
+            "properties": {
+              "path": {
+                "$ref": "#/definitions/path"
+              },
+              "op": {
+                "description": "The operation to perform.",
+                "type": "string",
+                "enum": ["add", "replace", "test"]
+              },
+              "value": {
+                "description": "The value to add, replace or test."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["op", "path"],
+            "properties": {
+              "path": {
+                "$ref": "#/definitions/path"
+              },
+              "op": {
+                "description": "The operation to perform.",
+                "type": "string",
+                "const": "remove"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from", "op", "path"],
+            "properties": {
+              "path": {
+                "$ref": "#/definitions/path"
+              },
+              "op": {
+                "description": "The operation to perform.",
+                "type": "string",
+                "enum": ["move", "copy"]
+              },
+              "from": {
+                "$ref": "#/definitions/path",
+                "type": "string",
+                "description": "A JSON Pointer path pointing to the location to move/copy from.",
+                "pattern": "^#?(|(/([^/~]|~[01])*)*)$"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

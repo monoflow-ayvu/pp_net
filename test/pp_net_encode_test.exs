@@ -4,11 +4,60 @@ defmodule PpnetEncodeTest do
 
   alias PPNet.Message.ChunkedMessageBody
   alias PPNet.Message.ChunkedMessageHeader
+  alias PPNet.Message.ConfigAck
+  alias PPNet.Message.ConfigData
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
+
+  @full_config "test/support/static/config.json"
+               |> File.read!()
+               |> Jason.decode!()
+
+  @config_data_by_kind %{
+    schema: %{
+      "type" => "object",
+      "required" => ["version", "revision"],
+      "properties" => %{
+        "version" => %{"const" => 1},
+        "revision" => %{"type" => "integer"}
+      }
+    },
+    full_report: %{"version" => 1, "revision" => 7, "tz_offset_minutes" => 60},
+    partial_report: %{"version" => 1, "revision" => 7, "tz_offset_minutes" => 60},
+    request_schema: nil,
+    request_full_config: nil,
+    request_partial_config: ["/settings/tz_offset_minutes", "/cameras"],
+    set_config: %{
+      "version" => 1,
+      "revision" => 6,
+      "operations" => [
+        %{"op" => "replace", "path" => "/settings/tz_offset_minutes", "value" => 0},
+        %{"op" => "replace", "path" => "/cameras/1/recording_enabled", "value" => false}
+      ]
+    }
+  }
+
+  @invalid_config_data_by_kind %{
+    # missing required "version"/"revision"
+    schema: %{"type" => "object"},
+    # missing "version"/"revision" fields
+    full_report: %{"settings" => %{}},
+    partial_report: %{"settings" => %{}},
+    # must be nil — no payload allowed
+    request_schema: %{"unexpected" => true},
+    request_full_config: %{"unexpected" => true},
+    # not a JSON Pointer (doesn't start with "/" or "#")
+    request_partial_config: ["not-a-pointer"],
+    # unknown "op"
+    set_config: %{
+      "version" => 1,
+      "revision" => 1,
+      "operations" => [%{"op" => "bogus", "path" => "/x"}]
+    }
+  }
 
   describe "encode PPNet.Message.Hello" do
     test "encode/1 with valid data" do
@@ -534,6 +583,218 @@ defmodule PpnetEncodeTest do
                  data: <<1, 2, 3, 4, 5>>,
                  datetime: DateTime.utc_now()
                })
+    end
+  end
+
+  describe "encode_message/2 retransmission options" do
+    setup do
+      image = %Image{
+        id: UUID.uuid4(),
+        format: :webp,
+        data: File.read!("test/support/static/image.webp"),
+        datetime: ~U[2026-03-27 20:15:41Z]
+      }
+
+      {:ok, image: image}
+    end
+
+    test "when transaction_id is given, it is used instead of generating one", %{image: image} do
+      [header_bin | _chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 42)
+
+      assert %{messages: [%ChunkedMessageHeader{transaction_id: 42}], errors: []} = PPNet.parse(header_bin)
+    end
+
+    test "return a tuple of transaction_id and chunks when return_transaction_id: true", %{image: image} do
+      # pin transaction_id on both calls — without it each call generates its own random id,
+      # so the frames (which embed transaction_id) would never compare equal
+      default = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+      assert is_list(default)
+
+      assert {7, ^default} = PPNet.encode_message(image, limit: 200, transaction_id: 7, return_transaction_id: true)
+    end
+
+    test "when the encoded message is a single frame, `return_transaction_id: true` is a no-op" do
+      message = %SingleCounter{kind: "a", value: 0, pulses: 0, duration_ms: 0, datetime: DateTime.utc_now()}
+
+      assert PPNet.encode_message(message, return_transaction_id: true) == PPNet.encode_message(message)
+    end
+
+    test "encoding the same message with the same transaction_id is byte-for-byte deterministic", %{image: image} do
+      assert PPNet.encode_message(image, limit: 200, transaction_id: 7) ==
+               PPNet.encode_message(image, limit: 200, transaction_id: 7)
+    end
+
+    test "chunk_indexes: [...] returns only those body chunks, no header", %{image: image} do
+      [_header | all_chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+
+      chunks_to_resend = PPNet.encode_message(image, limit: 200, transaction_id: 7, chunk_indexes: [3, 5])
+
+      # The chunks generated for retransmission must be exactly the same as the original chunks.
+      assert chunks_to_resend == [Enum.at(all_chunks, 3), Enum.at(all_chunks, 5)]
+    end
+
+    test "chunk_indexes: [...] rejects an out-of-range index", %{image: image} do
+      assert_raise ArgumentError, ~r/out of range/, fn ->
+        PPNet.encode_message(image, limit: 200, transaction_id: 7, chunk_indexes: [999_999])
+      end
+    end
+
+    test "encode_message_stream/2 accepts the same chunk_indexes option", %{image: image} do
+      [_header | all_chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+
+      # It continues to return a stream normally.
+      assert %Stream{} = stream = PPNet.encode_message_stream(image, limit: 200, transaction_id: 7, chunk_indexes: [3])
+      assert Enum.to_list(stream) == [Enum.at(all_chunks, 3)]
+    end
+  end
+
+  describe "encode PPNet.Message.ConfigData" do
+    for kind <- Map.keys(@config_data_by_kind),
+        format <- [:json, :msgpack],
+        compression <- [:none, :brotli] do
+      @tag kind: kind, format: format, compression: compression
+      test "#{kind} round-trips with format: #{format}, compression: #{compression}",
+           %{kind: kind, format: format, compression: compression} do
+        message = %ConfigData{
+          kind: kind,
+          request_id: System.unique_integer([:positive]),
+          format: format,
+          compression: compression,
+          request_payload: @config_data_by_kind[kind],
+          datetime: ~U[2026-03-27 16:25:12Z]
+        }
+
+        encoded = PPNet.encode_message(message)
+        assert is_binary(encoded), "expected a single frame, got: #{inspect(encoded)}"
+
+        assert %{messages: [decoded], errors: []} = PPNet.parse(encoded)
+        assert decoded == message
+      end
+    end
+
+    for kind <- Map.keys(@invalid_config_data_by_kind) do
+      @tag kind: kind
+      test "#{kind} rejects an invalid request_payload", %{kind: kind} do
+        message = %ConfigData{
+          kind: kind,
+          request_id: System.unique_integer([:positive]),
+          format: :json,
+          compression: :none,
+          request_payload: @invalid_config_data_by_kind[kind],
+          datetime: ~U[2026-03-27 16:25:12Z]
+        }
+
+        assert {:error, %PPNet.PackError{}} = ConfigData.pack(message)
+      end
+    end
+
+    test "message too large is split into chunks" do
+      schema =
+        "test/support/static/config.schema.json"
+        |> File.read!()
+        |> Jason.decode!()
+
+      message = %ConfigData{
+        kind: :schema,
+        request_id: System.unique_integer([:positive]),
+        format: :json,
+        compression: :none,
+        request_payload: schema,
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      [encoded_header | encoded_chunks] = PPNet.encode_message(message)
+
+      assert %{messages: [decoded_header | decoded_chunks], errors: []} =
+               [encoded_header | encoded_chunks]
+               |> Enum.join()
+               |> PPNet.parse()
+
+      assert decoded_header.message_module == ConfigData
+      assert decoded_header.total_chunks == length(decoded_chunks)
+
+      assert Enum.all?(decoded_chunks, fn decoded_chunk ->
+               decoded_chunk.transaction_id == decoded_header.transaction_id
+             end)
+
+      assert PPNet.chunked_to_message([decoded_header | decoded_chunks]) == {:ok, message}
+    end
+
+    test "full_report too large is split into chunks" do
+      message = %ConfigData{
+        kind: :full_report,
+        request_id: System.unique_integer([:positive]),
+        format: :json,
+        compression: :none,
+        request_payload: @full_config,
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      [encoded_header | encoded_chunks] = PPNet.encode_message(message)
+
+      assert %{messages: [decoded_header | decoded_chunks], errors: []} =
+               [encoded_header | encoded_chunks]
+               |> Enum.join()
+               |> PPNet.parse()
+
+      assert decoded_header.message_module == ConfigData
+      assert decoded_header.total_chunks == length(decoded_chunks)
+
+      assert Enum.all?(decoded_chunks, fn decoded_chunk ->
+               decoded_chunk.transaction_id == decoded_header.transaction_id
+             end)
+
+      assert PPNet.chunked_to_message([decoded_header | decoded_chunks]) == {:ok, message}
+    end
+
+    test "pack/1 with invalid struct returns error" do
+      # :unknown is not a valid kind
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               ConfigData.pack(%ConfigData{
+                 kind: :unknown,
+                 request_id: System.unique_integer([:positive]),
+                 format: :json,
+                 compression: :none,
+                 request_payload: nil,
+                 datetime: DateTime.utc_now()
+               })
+    end
+  end
+
+  describe "encode PPNet.Message.ConfigAck" do
+    test "encode/1 with valid data" do
+      message = %ConfigAck{request_id: 1, status: :ok, datetime: ~U[2026-03-27 16:25:12Z]}
+
+      assert PPNet.encode_message(message) ==
+               <<0x02, 0x0A, 0x01, 0x01, 0x02, 0x01, 0x0D, 0x69, 0xC6, 0xAF, 0x68, 0x5E, 0x59, 0x38, 0x8F, 0x73, 0x15,
+                 0xD5, 0x60, 0x00>>
+    end
+
+    for status <- [:ok, :invalid_patch, :conflict, :decode_error, :unknown] do
+      @tag status: status
+      test "#{status} round-trips", %{status: status} do
+        message = %ConfigAck{
+          request_id: System.unique_integer([:positive]),
+          status: status,
+          datetime: ~U[2026-03-27 16:25:12Z]
+        }
+
+        encoded = PPNet.encode_message(message)
+        assert byte_size(encoded) == 20
+
+        assert %{messages: [decoded], errors: []} = PPNet.parse(encoded)
+        assert decoded == message
+      end
+    end
+
+    test "pack/1 with invalid struct returns error" do
+      # negative request_id violates guard
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               ConfigAck.pack(%ConfigAck{request_id: -1, status: :ok, datetime: DateTime.utc_now()})
+
+      # :bogus is not a valid status
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               ConfigAck.pack(%ConfigAck{request_id: 1, status: :bogus, datetime: DateTime.utc_now()})
     end
   end
 
