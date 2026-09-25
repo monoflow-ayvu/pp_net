@@ -14,12 +14,11 @@ defmodule PPNet.Message.Hello do
   @derive Jason.Encoder
   @type_code 1
 
-  defguard is_valid_types(unique_id, board_identifier, version, board_version, boot_id, ppnet_version)
+  defguard is_valid_types(unique_id, board_identifier, version, board_version, boot_id)
            when is_binary(unique_id) and is_binary(board_identifier) and
                   is_integer(version) and version >= 0 and
                   is_integer(board_version) and board_version >= 0 and
-                  is_integer(boot_id) and boot_id >= 0 and
-                  is_integer(ppnet_version) and ppnet_version >= 0
+                  is_integer(boot_id) and boot_id >= 0
 
   defguard is_valid_types_to_parse(
              unique_id,
@@ -27,14 +26,12 @@ defmodule PPNet.Message.Hello do
              version,
              board_version,
              boot_id,
-             ppnet_version,
              datetime_unix
            )
            when is_binary(unique_id) and is_binary(board_identifier) and
                   is_integer(version) and version >= 0 and
                   is_integer(board_version) and board_version >= 0 and
                   is_integer(boot_id) and boot_id >= 0 and
-                  is_integer(ppnet_version) and ppnet_version >= 0 and
                   is_integer(datetime_unix) and datetime_unix > 0
 
   typedstruct do
@@ -57,7 +54,7 @@ defmodule PPNet.Message.Hello do
     field(:version, non_neg_integer(), enforce: true)
     field(:board_version, non_neg_integer(), enforce: true)
     field(:boot_id, non_neg_integer(), enforce: true)
-    field(:ppnet_version, non_neg_integer(), default: 1)
+    field(:ppnet_version, String.t())
     field(:datetime, DateTime.t(), enforce: true)
   end
 
@@ -74,10 +71,9 @@ defmodule PPNet.Message.Hello do
         version: version,
         board_version: board_version,
         boot_id: boot_id,
-        ppnet_version: ppnet_version,
         datetime: %DateTime{} = datetime
       })
-      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id, ppnet_version) do
+      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) do
     Msgpax.pack!(
       [
         unique_id,
@@ -85,7 +81,7 @@ defmodule PPNet.Message.Hello do
         version,
         board_version,
         boot_id,
-        ppnet_version,
+        ppnet_version(),
         DateTime.to_unix(datetime)
       ],
       iodata: false
@@ -109,7 +105,8 @@ defmodule PPNet.Message.Hello do
   # Maintains compatibility with the old format (without datetime)
   # Since it doesn't have a datetime, it sets `now` as the default value.
   def parse([unique_id, board_identifier, version, board_version, boot_id, ppnet_version])
-      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id, ppnet_version) do
+      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) and is_integer(ppnet_version) and
+             ppnet_version >= 0 do
     {:ok,
      %Hello{
        unique_id: to_string(unique_id),
@@ -123,15 +120,8 @@ defmodule PPNet.Message.Hello do
   end
 
   def parse([unique_id, board_identifier, version, board_version, boot_id, ppnet_version, datetime])
-      when is_valid_types_to_parse(
-             unique_id,
-             board_identifier,
-             version,
-             board_version,
-             boot_id,
-             ppnet_version,
-             datetime
-           ) do
+      when (is_valid_types_to_parse(unique_id, board_identifier, version, board_version, boot_id, datetime) and
+              (is_integer(ppnet_version) and ppnet_version >= 0)) or is_binary(ppnet_version) do
     {:ok,
      %Hello{
        unique_id: to_string(unique_id),
@@ -152,4 +142,6 @@ defmodule PPNet.Message.Hello do
        data: {:unpacked_body, unpacked_body}
      }}
   end
+
+  defp ppnet_version, do: to_string(Application.spec(:pp_net, :vsn))
 end

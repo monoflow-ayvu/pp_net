@@ -73,9 +73,9 @@ defmodule PpnetEncodeTest do
         }
 
       assert PPNet.encode_message(message) ==
-               <<0x2E, 0x01, 0x97, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65,
-                 0x73, 0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0xCE,
-                 0x69, 0xC5, 0x9E, 0x87, 0x25, 0xD8, 0xC2, 0x4C, 0x7E, 0x8B, 0x0F, 0x96, 0x00>>
+               <<51, 1, 151, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101, 115, 116, 101, 114, 205,
+                 18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 165, 48, 46, 50, 46, 48, 206, 105, 197, 158, 135, 43, 29, 69,
+                 217, 24, 65, 68, 62, 0>>
     end
 
     test "message too large is split into chunks" do
@@ -83,7 +83,7 @@ defmodule PpnetEncodeTest do
         board_identifier: "Tester",
         board_version: 17_185,
         boot_id: 87_372_886,
-        ppnet_version: 1,
+        ppnet_version: "0.2.0",
         unique_id: "TestRunner",
         version: 4660,
         datetime: ~U[2026-03-26 21:00:55Z]
@@ -863,7 +863,7 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 16:25:12Z]
       }
 
-      assert byte_size(PPNet.encode_message(message)) == 88
+      assert byte_size(PPNet.encode_message(message)) == 93
     end
 
     test "encode a SingleCounter message" do

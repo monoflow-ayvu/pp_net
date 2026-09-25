@@ -1044,7 +1044,7 @@ defmodule PPNetTest do
                  board_identifier: "Tester",
                  board_version: 17_185,
                  boot_id: 87_372_886,
-                 ppnet_version: 1,
+                 ppnet_version: "0.2.0",
                  unique_id: "TestRunner",
                  version: 4660
                }
