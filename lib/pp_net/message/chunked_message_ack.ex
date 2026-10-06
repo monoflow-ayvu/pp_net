@@ -16,7 +16,7 @@ defmodule PPNet.Message.ChunkedMessageAck do
   alias PPNet.ParseError
 
   @type_code 8
-  @status_codes %{ok: 0, incomplete: 1}
+  @status_codes %{ok: 0, incomplete: 1, missing_header: 2}
   @status_codes_reverse Map.new(@status_codes, fn {k, v} -> {v, k} end)
   @statuses Map.keys(@status_codes)
 
@@ -57,17 +57,16 @@ defmodule PPNet.Message.ChunkedMessageAck do
         limit
       )
       when is_integer(transaction_id) and transaction_id >= 0 and status in @statuses and is_list(missing_chunks) do
-    max = max_missing_chunks(limit)
+    missing_chunks_binary =
+      missing_chunks
+      |> Enum.sort()
+      |> gen_delta()
+      |> encode_varints()
 
-    if length(missing_chunks) <= max do
-      missing_chunks_binary =
-        missing_chunks
-        |> Enum.sort()
-        |> gen_delta()
-        |> encode_varints()
+    missing_chunks_size = byte_size(missing_chunks_binary)
+    max_size = max_missing_chunks_size(limit)
 
-      missing_chunks_size = byte_size(missing_chunks_binary)
-
+    if missing_chunks_size <= max_size do
       <<
         transaction_id::unsigned-integer-size(4)-unit(8),
         @status_codes[status]::unsigned-integer-size(1)-unit(8),
@@ -79,9 +78,9 @@ defmodule PPNet.Message.ChunkedMessageAck do
       {:error,
        %PackError{
          message:
-           "missing_chunks has #{length(missing_chunks)} entries, exceeds the maximum of #{max} for limit #{inspect(limit)}",
+           "missing_chunks takes #{missing_chunks_size} bytes encoded, exceeds the maximum of #{max_size} for limit #{inspect(limit)}",
          reason: :too_many_missing_chunks,
-         data: %{count: length(missing_chunks), max: max, limit: limit}
+         data: %{count: length(missing_chunks), size: missing_chunks_size, max_size: max_size, limit: limit}
        }}
     end
   rescue
@@ -164,9 +163,9 @@ defmodule PPNet.Message.ChunkedMessageAck do
     {value + higher * 128, remaining}
   end
 
-  defp max_missing_chunks(nil), do: max_missing_chunks(_ppnet_min_limit = 22)
+  defp max_missing_chunks_size(nil), do: max_missing_chunks_size(_ppnet_min_limit = 22)
 
-  # In the worst case, each entry in `missing_chunks` takes 2 bytes (varint).
-  # That's why we divide by 2, to guarantee the total size never exceeds `limit` in the worst case.
-  defp max_missing_chunks(limit), do: div(limit - @frame_overhead - @fixed_fields_size, 2)
+  # Entries are delta+varint encoded, so how many fit depends on the gaps between them (1 to 3 bytes
+  # each), not on their count. What is left of the frame after the fixed fields is the byte budget.
+  defp max_missing_chunks_size(limit), do: limit - @frame_overhead - @fixed_fields_size
 end

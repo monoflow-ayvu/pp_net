@@ -5,6 +5,7 @@ defmodule PPNetTest do
   import ExUnit.CaptureLog
   import PPNet.Test.Helper
 
+  alias PPNet.Message.ChunkedMessageAck
   alias PPNet.Message.ChunkedMessageBody
   alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.ConfigAck
@@ -255,6 +256,32 @@ defmodule PPNetTest do
       <<0x02, 0x0A, 0x01, 0x01, 0x0F, 0x01, 0x04, 0x69, 0xC6, 0xAF, 0x68, 0x15, 0xA0, 0x09, 0x67, 0x91, 0x25, 0x43,
         0x4B, 0x00>>
   }
+
+  # Generated once with transaction_id: 42, datetime: ~U[2026-03-27 16:25:12Z], then pinned so
+  # decode is tested against fixed wire bytes, not bytes produced by encode_message/2 in the same
+  # test run. Each entry is {status, missing_chunks, binary}.
+  @chunked_message_ack_binaries [
+    # 21 bytes
+    {:ok, [],
+     <<0x02, 0x08, 0x01, 0x01, 0x02, 0x2A, 0x01, 0x0D, 0x69, 0xC6, 0xAF, 0x68, 0x60, 0x0D, 0x7B, 0x91, 0x3D, 0x47, 0xC6,
+       0x71, 0x00>>},
+    # 22 bytes
+    {:incomplete, [3],
+     <<0x02, 0x08, 0x01, 0x01, 0x0E, 0x2A, 0x01, 0x01, 0x03, 0x69, 0xC6, 0xAF, 0x68, 0xF4, 0x20, 0xD6, 0xEC, 0xEF, 0x03,
+       0xB1, 0xF9, 0x00>>},
+    # 26 bytes — 1000 is a two-byte varint delta
+    {:incomplete, [3, 5, 130, 1000],
+     <<0x02, 0x08, 0x01, 0x01, 0x15, 0x2A, 0x01, 0x05, 0x03, 0x02, 0x7D, 0xE6, 0x06, 0x69, 0xC6, 0xAF, 0x68, 0x01, 0x8B,
+       0x6A, 0xD9, 0x71, 0x5C, 0xDC, 0x1A, 0x00>>},
+    # 23 bytes — first value >= 128 is a two-byte varint
+    {:incomplete, [200],
+     <<0x02, 0x08, 0x01, 0x01, 0x12, 0x2A, 0x01, 0x02, 0xC8, 0x01, 0x69, 0xC6, 0xAF, 0x68, 0x30, 0x53, 0xFE, 0xD6, 0xFD,
+       0x1B, 0xD9, 0xF4, 0x00>>},
+    # 21 bytes
+    {:missing_header, [],
+     <<0x02, 0x08, 0x01, 0x01, 0x03, 0x2A, 0x02, 0x0D, 0x69, 0xC6, 0xAF, 0x68, 0xD1, 0x4A, 0x53, 0x9B, 0x04, 0xF3, 0xCE,
+       0x22, 0x00>>}
+  ]
 
   describe "decode PPNet.Message.Hello" do
     test "parse/1 with valid binary data" do
@@ -788,6 +815,29 @@ defmodule PPNetTest do
                  datetime: ~U[2026-03-27 16:25:12Z]
                }
       end
+    end
+  end
+
+  describe "decode PPNet.Message.ChunkedMessageAck" do
+    for {{status, missing_chunks, binary}, index} <- Enum.with_index(@chunked_message_ack_binaries) do
+      @tag status: status, missing_chunks: missing_chunks, binary: binary
+      test "#{status} with missing_chunks #{inspect(missing_chunks)} decodes (case #{index})",
+           %{status: status, missing_chunks: missing_chunks, binary: binary} do
+        assert %{messages: [decoded], errors: []} = PPNet.parse(binary)
+
+        assert decoded == %ChunkedMessageAck{
+                 transaction_id: 42,
+                 status: status,
+                 missing_chunks: missing_chunks,
+                 datetime: ~U[2026-03-27 16:25:12Z]
+               }
+      end
+    end
+
+    test "parse/1 with a body that does not match the expected format returns error" do
+      # missing_chunks_size (5) claims more bytes than the body has
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
+               ChunkedMessageAck.parse(<<0, 0, 0, 42, 1, 5, 3>>)
     end
   end
 

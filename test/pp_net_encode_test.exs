@@ -2,6 +2,7 @@
 defmodule PpnetEncodeTest do
   use ExUnit.Case, async: true
 
+  alias PPNet.Message.ChunkedMessageAck
   alias PPNet.Message.ChunkedMessageBody
   alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.ConfigAck
@@ -646,6 +647,148 @@ defmodule PpnetEncodeTest do
       assert %Stream{} = stream = PPNet.encode_message_stream(image, limit: 200, transaction_id: 7, chunk_indexes: [3])
       assert Enum.to_list(stream) == [Enum.at(all_chunks, 3)]
     end
+
+    test "return_header: true adds the header to the chunks selected by chunk_indexes", %{image: image} do
+      [header | all_chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+
+      opts = [limit: 200, transaction_id: 7, chunk_indexes: [3, 5], return_header: true]
+
+      assert PPNet.encode_message(image, opts) == [header, Enum.at(all_chunks, 3), Enum.at(all_chunks, 5)]
+    end
+
+    test "chunk_indexes: [] with return_header: true encodes only the header", %{image: image} do
+      [header | _chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+
+      opts = [limit: 200, transaction_id: 7, chunk_indexes: [], return_header: true]
+
+      assert PPNet.encode_message(image, opts) == [header]
+    end
+
+    test "return_header: false keeps chunk_indexes chunks-only", %{image: image} do
+      [_header | all_chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+
+      opts = [limit: 200, transaction_id: 7, chunk_indexes: [3], return_header: false]
+
+      assert PPNet.encode_message(image, opts) == [Enum.at(all_chunks, 3)]
+    end
+
+    test "return_header has no effect without chunk_indexes, the header is always included", %{image: image} do
+      all_frames = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+
+      assert PPNet.encode_message(image, limit: 200, transaction_id: 7, return_header: true) == all_frames
+      assert PPNet.encode_message(image, limit: 200, transaction_id: 7, return_header: false) == all_frames
+    end
+
+    test "return_header: true still rejects an out-of-range chunk index", %{image: image} do
+      assert_raise ArgumentError, ~r/out of range/, fn ->
+        PPNet.encode_message(image, limit: 200, transaction_id: 7, chunk_indexes: [999_999], return_header: true)
+      end
+    end
+
+    test "encode_message_stream/2 accepts return_header", %{image: image} do
+      [header | all_chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+
+      opts = [limit: 200, transaction_id: 7, chunk_indexes: [3], return_header: true]
+
+      assert Enum.to_list(PPNet.encode_message_stream(image, opts)) == [header, Enum.at(all_chunks, 3)]
+    end
+  end
+
+  describe "encode_message/2 force_chunked" do
+    setup do
+      {:ok,
+       message: %SingleCounter{kind: "a", value: 1, pulses: 0, duration_ms: 10, datetime: ~U[2026-03-27 16:25:12Z]}}
+    end
+
+    test "a message that fits in one frame is a single binary by default", %{message: message} do
+      assert is_binary(PPNet.encode_message(message))
+    end
+
+    test "force_chunked: true splits it into a header and a chunk anyway", %{message: message} do
+      assert [_header_bin | _chunk_bins] = frames = PPNet.encode_message(message, force_chunked: true)
+
+      assert %{
+               messages: [%ChunkedMessageHeader{message_module: SingleCounter, total_chunks: 1} = header | chunks],
+               errors: []
+             } =
+               PPNet.parse(frames)
+
+      assert length(chunks) == 1
+      assert PPNet.chunked_to_message([header | chunks]) == {:ok, message}
+    end
+
+    test "force_chunked: true works with transaction_id and return_transaction_id", %{message: message} do
+      assert {42, [header_bin, _chunk_bin]} =
+               PPNet.encode_message(message, force_chunked: true, transaction_id: 42, return_transaction_id: true)
+
+      assert %{messages: [%ChunkedMessageHeader{transaction_id: 42}], errors: []} = PPNet.parse(header_bin)
+    end
+
+    test "force_chunked: true works with chunk_indexes", %{message: message} do
+      [_header | [chunk]] = PPNet.encode_message(message, force_chunked: true, transaction_id: 42)
+
+      assert PPNet.encode_message(message, force_chunked: true, transaction_id: 42, chunk_indexes: [0]) == [chunk]
+    end
+
+    test "encode_message_stream/2 also honors force_chunked", %{message: message} do
+      frames =
+        message
+        |> PPNet.encode_message_stream(force_chunked: true)
+        |> Enum.to_list()
+
+      assert [_header_bin, _chunk_bin] = frames
+    end
+
+    test "force_chunked: false keeps the single frame", %{message: message} do
+      assert PPNet.encode_message(message, force_chunked: false) == PPNet.encode_message(message)
+    end
+  end
+
+  describe "encode_message/2 option validation" do
+    setup do
+      {:ok,
+       message: %SingleCounter{kind: "a", value: 1, pulses: 0, duration_ms: 10, datetime: ~U[2026-03-27 16:25:12Z]}}
+    end
+
+    for {name, opts} <- [
+          {"a negative limit", [limit: -1]},
+          {"a non-integer limit", [limit: "254"]},
+          {"a negative transaction_id", [transaction_id: -1]},
+          {"a transaction_id that does not fit in 4 bytes", [transaction_id: 4_294_967_296]},
+          {"a non-boolean return_transaction_id", [return_transaction_id: "yes"]},
+          {"a non-boolean force_chunked", [force_chunked: 1]},
+          {"a non-boolean return_header", [return_header: :header]},
+          {"chunk_indexes that is not a list", [chunk_indexes: 3]},
+          {"a negative chunk index", [chunk_indexes: [-1]]},
+          {"a non-integer chunk index", [chunk_indexes: ["1"]]},
+          {"an unknown option", [chunk_indxes: [1]]}
+        ] do
+      @tag opts: opts
+      test "encode_message/2 rejects #{name}, even for a single-frame message", %{message: message, opts: opts} do
+        assert_raise NimbleOptions.ValidationError, fn -> PPNet.encode_message(message, opts) end
+      end
+
+      @tag opts: opts
+      test "encode_message_stream/2 rejects #{name}", %{message: message, opts: opts} do
+        assert_raise NimbleOptions.ValidationError, fn -> PPNet.encode_message_stream(message, opts) end
+      end
+    end
+
+    test "transaction_id accepts the whole 4-byte range", %{message: message} do
+      for transaction_id <- [0, 4_294_967_295] do
+        assert {^transaction_id, [_header, _chunk]} =
+                 PPNet.encode_message(message,
+                   force_chunked: true,
+                   transaction_id: transaction_id,
+                   return_transaction_id: true
+                 )
+      end
+    end
+
+    test "an out-of-range limit is clamped instead of rejected", %{message: message} do
+      assert PPNet.encode_message(message, limit: 9999) == PPNet.encode_message(message, limit: 254)
+      assert PPNet.encode_message(message, limit: 0) == PPNet.encode_message(message, limit: 22)
+    end
   end
 
   describe "encode PPNet.Message.ConfigData" do
@@ -795,6 +938,168 @@ defmodule PpnetEncodeTest do
       # :bogus is not a valid status
       assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
                ConfigAck.pack(%ConfigAck{request_id: 1, status: :bogus, datetime: DateTime.utc_now()})
+    end
+  end
+
+  describe "encode PPNet.Message.ChunkedMessageAck" do
+    test "encode/1 with valid data" do
+      message = %ChunkedMessageAck{
+        transaction_id: 42,
+        status: :ok,
+        missing_chunks: [],
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert PPNet.encode_message(message) ==
+               <<0x02, 0x08, 0x01, 0x01, 0x02, 0x2A, 0x01, 0x0D, 0x69, 0xC6, 0xAF, 0x68, 0x60, 0x0D, 0x7B, 0x91, 0x3D,
+                 0x47, 0xC6, 0x71, 0x00>>
+    end
+
+    test "missing_chunks is delta+varint encoded" do
+      # [3, 5, 130, 1000] -> deltas [3, 2, 125, 870]; 870 needs two varint bytes (0xE6, 0x06)
+      message = %ChunkedMessageAck{
+        transaction_id: 42,
+        status: :incomplete,
+        missing_chunks: [3, 5, 130, 1000],
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert PPNet.encode_message(message) ==
+               <<0x02, 0x08, 0x01, 0x01, 0x15, 0x2A, 0x01, 0x05, 0x03, 0x02, 0x7D, 0xE6, 0x06, 0x69, 0xC6, 0xAF, 0x68,
+                 0x01, 0x8B, 0x6A, 0xD9, 0x71, 0x5C, 0xDC, 0x1A, 0x00>>
+    end
+
+    for {status, missing_chunks} <- [
+          ok: [],
+          incomplete: [3],
+          incomplete: [3, 5, 130, 1000],
+          incomplete: [200],
+          missing_header: []
+        ] do
+      @tag status: status, missing_chunks: missing_chunks
+      test "#{status} with missing_chunks #{inspect(missing_chunks)} round-trips",
+           %{status: status, missing_chunks: missing_chunks} do
+        message = %ChunkedMessageAck{
+          transaction_id: System.unique_integer([:positive]),
+          status: status,
+          missing_chunks: missing_chunks,
+          datetime: ~U[2026-03-27 16:25:12Z]
+        }
+
+        encoded = PPNet.encode_message(message)
+        assert is_binary(encoded), "expected a single frame, got: #{inspect(encoded)}"
+
+        assert %{messages: [decoded], errors: []} = PPNet.parse(encoded)
+        assert decoded == message
+      end
+    end
+
+    test "missing_chunks is sorted before encoding" do
+      unsorted = %ChunkedMessageAck{
+        transaction_id: 42,
+        status: :incomplete,
+        missing_chunks: [1000, 3, 130, 5],
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert PPNet.encode_message(unsorted) ==
+               PPNet.encode_message(%{unsorted | missing_chunks: [3, 5, 130, 1000]})
+    end
+
+    # The budget is in encoded bytes, not entries: 254 limit - 11 frame overhead - 10 fixed fields = 233.
+    # Consecutive indexes have a delta of 1, one varint byte each, so 233 of them fill it exactly.
+    test "pack/2 accepts as many missing_chunks as fit in the byte budget, and the frame stays within the limit" do
+      message = %ChunkedMessageAck{
+        transaction_id: 42,
+        status: :incomplete,
+        missing_chunks: Enum.to_list(0..232),
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert is_binary(ChunkedMessageAck.pack(message, 254))
+
+      frame = PPNet.encode_message(message)
+      assert is_binary(frame)
+      assert byte_size(frame) <= 254
+      assert %{messages: [^message], errors: []} = PPNet.parse(frame)
+    end
+
+    test "pack/2 rejects missing_chunks whose encoded size exceeds the byte budget" do
+      message = %ChunkedMessageAck{
+        transaction_id: 42,
+        status: :incomplete,
+        missing_chunks: Enum.to_list(0..233),
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert {:error,
+              %PPNet.PackError{
+                reason: :too_many_missing_chunks,
+                data: %{count: 234, size: 234, max_size: 233, limit: 254}
+              }} = ChunkedMessageAck.pack(message, 254)
+    end
+
+    test "pack/2 counts 3 bytes for gaps of 16384 or more, so 116 widely spaced entries do not fit" do
+      # chunk_index is 16 bits: three gaps of 16384 cost 3 bytes each, the other 113 entries cost 2,
+      # for 235 bytes. Counting 2 bytes per entry (116 * 2 = 232) would let this through and the
+      # frame would exceed the limit.
+      missing_chunks = [16_384, 32_768, 49_152] ++ Enum.map(1..113, &(49_152 + &1 * 128))
+
+      message = %ChunkedMessageAck{
+        transaction_id: 42,
+        status: :incomplete,
+        missing_chunks: missing_chunks,
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert length(missing_chunks) == 116
+
+      assert {:error,
+              %PPNet.PackError{
+                reason: :too_many_missing_chunks,
+                data: %{count: 116, size: 235, max_size: 233, limit: 254}
+              }} = ChunkedMessageAck.pack(message, 254)
+    end
+
+    test "pack/1 assumes the minimum limit, a budget of 1 encoded byte" do
+      message = %ChunkedMessageAck{
+        transaction_id: 42,
+        status: :incomplete,
+        missing_chunks: [1],
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert is_binary(ChunkedMessageAck.pack(message))
+
+      assert {:error, %PPNet.PackError{reason: :too_many_missing_chunks, data: %{size: 2, max_size: 1, limit: nil}}} =
+               ChunkedMessageAck.pack(%{message | missing_chunks: [1, 2]})
+    end
+
+    test "pack/1 with invalid struct returns error" do
+      # negative transaction_id violates guard
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               ChunkedMessageAck.pack(%ChunkedMessageAck{
+                 transaction_id: -1,
+                 status: :ok,
+                 datetime: DateTime.utc_now()
+               })
+
+      # :bogus is not a valid status
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               ChunkedMessageAck.pack(%ChunkedMessageAck{
+                 transaction_id: 1,
+                 status: :bogus,
+                 datetime: DateTime.utc_now()
+               })
+
+      # missing_chunks must be a list
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               ChunkedMessageAck.pack(%ChunkedMessageAck{
+                 transaction_id: 1,
+                 status: :incomplete,
+                 missing_chunks: 3,
+                 datetime: DateTime.utc_now()
+               })
     end
   end
 

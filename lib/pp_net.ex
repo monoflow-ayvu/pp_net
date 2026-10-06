@@ -224,8 +224,10 @@ defmodule PPNet do
   @type encode_message_opts :: [
           limit: pos_integer(),
           transaction_id: transaction_id(),
+          force_chunked: boolean(),
           return_transaction_id: boolean(),
-          chunk_indexes: [non_neg_integer()]
+          chunk_indexes: [non_neg_integer()],
+          return_header: boolean()
         ]
   @type transaction_id :: non_neg_integer()
   @type stream :: Enumerable.t()
@@ -249,6 +251,48 @@ defmodule PPNet do
   @chunk_header_size 22
 
   @delimiter <<0>>
+
+  @encode_opts_schema NimbleOptions.new!(
+                        limit: [
+                          type: :non_neg_integer,
+                          default: @limit,
+                          doc:
+                            "Maximum frame size in bytes. Clamped to the range `22..254`. The minimum of 22 " <>
+                              "matches the encoded size of a `ChunkedMessageHeader` frame — going below that " <>
+                              "would cause the header itself to be chunked. 254 is the COBS limit."
+                        ],
+                        return_transaction_id: [
+                          type: :boolean,
+                          default: false,
+                          doc: "When `true`, a chunked message returns `{transaction_id, frames}` instead of `frames`."
+                        ],
+                        transaction_id: [
+                          type: {:in, 0..0xFFFF_FFFF},
+                          doc:
+                            "Use this id instead of generating one. Needed to resend frames of an " <>
+                              "already-sent chunked message under the same id."
+                        ],
+                        force_chunked: [
+                          type: :boolean,
+                          default: false,
+                          doc: "Chunk the message even when it fits in a single frame."
+                        ],
+                        chunk_indexes: [
+                          type: {:list, :non_neg_integer},
+                          doc:
+                            "Only encode the body chunks with these indexes, to resend what a " <>
+                              "`ChunkedMessageAck` reported missing. Raises `ArgumentError` if an index is " <>
+                              "out of range for the message."
+                        ],
+                        return_header: [
+                          type: :boolean,
+                          default: false,
+                          doc:
+                            "Also return the `ChunkedMessageHeader` frame when `:chunk_indexes` is given " <>
+                              "(use `chunk_indexes: [], return_header: true` to encode only the header). " <>
+                              "Has no effect without `:chunk_indexes`, where the header is always included."
+                        ]
+                      )
 
   @hello_type_code 1
   @single_counter_type_code 2
@@ -283,21 +327,23 @@ defmodule PPNet do
 
   ## Options
 
-  * `:limit` - Maximum frame size in bytes. Defaults to 254. Clamped to the range `22..254`.
-    The minimum of 22 matches the encoded size of a `ChunkedMessageHeader` frame — going below
-    that would cause the header itself to be chunked. 254 is the COBS limit.
-  * `:return_transaction_id` - When `true`, returns a tuple `{transaction_id, message_chunks}`.
+  #{NimbleOptions.docs(@encode_opts_schema)}
+
+  Options are validated up front: an invalid value or an unknown option raises
+  `NimbleOptions.ValidationError`, even when the message fits in a single frame.
   """
   @spec encode_message(message :: message(), opts :: encode_message_opts()) ::
           binary()
           | [binary()]
           | {transaction_id(), [binary()]}
   def encode_message(%module{} = message, opts \\ []) do
+    opts = NimbleOptions.validate!(opts, @encode_opts_schema)
+
     limit = get_limit(opts)
 
     packaged_data = pack(message, limit)
 
-    if frame_size(packaged_data) <= limit do
+    if frame_size(packaged_data) <= limit and not opts[:force_chunked] do
       encode_frame(module.type_code(), packaged_data)
     else
       transaction_id = Keyword.get(opts, :transaction_id, gen_transaction_id())
@@ -328,11 +374,13 @@ defmodule PPNet do
           | stream()
           | {transaction_id(), stream()}
   def encode_message_stream(%module{} = message, opts \\ []) do
+    opts = NimbleOptions.validate!(opts, @encode_opts_schema)
+
     limit = get_limit(opts)
 
     packaged_data = pack(message, limit)
 
-    if frame_size(packaged_data) <= limit do
+    if frame_size(packaged_data) <= limit and not opts[:force_chunked] do
       [encode_frame(module.type_code(), packaged_data)]
     else
       transaction_id = Keyword.get(opts, :transaction_id, gen_transaction_id())
@@ -364,6 +412,22 @@ defmodule PPNet do
 
   defp chunked_frame_stream(binary, datetime, module, transaction_id, opts) do
     limit = get_limit(opts)
+    frame_opts = [limit: limit]
+    chunk_size = chunk_size!(limit)
+    total_chunks = div(byte_size(binary) + chunk_size - 1, chunk_size)
+
+    {indexes, with_header?} = select_frames(opts[:chunk_indexes], opts[:return_header], total_chunks)
+    bodies = encode_chunks_stream(binary, datetime, transaction_id, chunk_size, indexes, frame_opts)
+
+    if with_header? do
+      header = encode_header(module, transaction_id, datetime, total_chunks, frame_opts)
+      Stream.concat([header], bodies)
+    else
+      bodies
+    end
+  end
+
+  defp chunk_size!(limit) do
     chunk_size = limit - @chunk_header_size
 
     if chunk_size == 0 do
@@ -371,33 +435,30 @@ defmodule PPNet do
             "limit #{limit} leaves no room for chunk data (per-chunk overhead is #{@chunk_header_size} bytes)"
     end
 
-    total_chunks = div(byte_size(binary) + chunk_size - 1, chunk_size)
+    chunk_size
+  end
 
-    indexes =
-      if is_list(opts[:chunk_indexes]) do
-        check_chunck_indexes!(opts[:chunk_indexes], total_chunks)
-        opts[:chunk_indexes]
-      else
-        0..(total_chunks - 1)
-      end
+  # without chunk_indexes: every chunk, and the header is always included
+  defp select_frames(nil, _return_header, total_chunks), do: {0..(total_chunks - 1), true}
 
-    bodies = encode_chunks(binary, datetime, transaction_id, chunk_size, indexes, opts)
+  defp select_frames(chunk_indexes, return_header, total_chunks) do
+    check_chunck_indexes!(chunk_indexes, total_chunks)
+    {chunk_indexes, return_header}
+  end
 
-    if is_list(opts[:chunk_indexes]) do
-      bodies
-    else
-      header = %ChunkedMessageHeader{
+  defp encode_header(module, transaction_id, datetime, total_chunks, opts) do
+    encode_message(
+      %ChunkedMessageHeader{
         message_module: module,
         transaction_id: transaction_id,
         datetime: datetime,
         total_chunks: total_chunks
-      }
-
-      Stream.concat([encode_message(header, opts)], bodies)
-    end
+      },
+      opts
+    )
   end
 
-  defp encode_chunks(binary, datetime, transaction_id, chunk_size, chunk_indices, opts) do
+  defp encode_chunks_stream(binary, datetime, transaction_id, chunk_size, chunk_indices, opts) do
     data_size = byte_size(binary)
 
     Stream.map(chunk_indices, fn index ->
