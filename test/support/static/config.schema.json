@@ -1,0 +1,369 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://axa/schemas/config.schema.json",
+  "title": "AXA device configuration document",
+  "description": "Canonical device config document: settings, cameras, functionality instances and model EP preferences. Bounds mirror the writer contracts (UI clamps, changesets, Network.validate) — never tighter than what legitimate flows write. Known legacy shapes (REDACTED secrets, gpio chip/line pins, removed LED pattern, partial maps) are accepted so an old export can always restore a board.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "revision", "settings", "cameras", "functionality_instances"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "version": {"const": 1},
+    "revision": {"type": "integer", "minimum": 1, "description": "Monotonic config state counter"},
+    "exported_at": {"type": "string", "description": "ISO8601 UTC"},
+    "settings": {"$ref": "#/$defs/settings"},
+    "cameras": {"type": "array", "items": {"$ref": "#/$defs/camera"}},
+    "functionality_instances": {"type": "array", "items": {"$ref": "#/$defs/functionalityInstance"}},
+    "models": {"type": "array", "items": {"$ref": "#/$defs/modelRow"}}
+  },
+  "$defs": {
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "device_name": {"type": "string", "maxLength": 255},
+        "tz_offset_minutes": {"type": "integer", "minimum": -720, "maximum": 840},
+        "ntp_servers": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "retention_defaults": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_days": {"type": "integer", "minimum": 1},
+            "max_bytes_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+            "max_events_per_camera": {"type": "integer", "minimum": 1}
+          }
+        },
+        "recording_limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_segment_s": {"type": "integer", "minimum": 5, "maximum": 3600}
+          }
+        },
+        "nvr_merge_bitrate_kbps": {"type": "integer", "minimum": 256, "maximum": 8192},
+        "nvr_pause_stable_s": {"type": "integer", "minimum": 1, "maximum": 3600},
+        "nerveshub_channel": {"type": "string", "minLength": 1},
+        "tls_meta": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fingerprint": {"type": "string"},
+            "product_secret": {"type": "string"}
+          }
+        },
+        "gpio_map": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/gpioPin"}
+        },
+        "alert_triggers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "info": {"$ref": "#/$defs/severityActions"},
+            "warning": {"$ref": "#/$defs/severityActions"},
+            "critical": {"$ref": "#/$defs/severityActions"},
+            "buzzer_output": {"type": "string"},
+            "relay_output": {"type": "string"},
+            "buzzer_on_ms": {"type": "integer", "minimum": 1},
+            "buzzer_off_ms": {"type": "integer", "minimum": 1},
+            "clear_after_seconds": {"type": "integer", "minimum": 1}
+          }
+        },
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "wifi": {"type": "array", "items": {"$ref": "#/$defs/wifiRow"}}
+          }
+        },
+        "cloud_sync": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "url": {"type": "string"},
+            "send_images": {"type": "boolean"},
+            "batch_size": {"type": "integer", "minimum": 1, "maximum": 200},
+            "sync_interval_ms": {"type": "integer", "minimum": 5000, "maximum": 3600000},
+            "ping_interval_ms": {"type": "integer", "minimum": 5000, "maximum": 3600000},
+            "timeout_ms": {"type": "integer", "minimum": 100},
+            "backoff_max_ms": {"type": "integer", "minimum": 100},
+            "synced_ttl_hours": {"type": "integer", "minimum": 1, "maximum": 8760}
+          }
+        },
+        "scheduling_custom_design": {
+          "type": "object",
+          "required": ["active", "design"],
+          "properties": {
+            "active": {"type": "boolean"},
+            "design": {"type": "object", "description": "Envelope only — AXA.Scheduling.Design.validate is the writer-side authority for the design body."}
+          }
+        },
+        "boot_count": {"type": "integer", "minimum": 0},
+        "global_features": {
+          "$comment": "Legacy-only: import drops this key; accepted so old exports validate (boolean-schema: anything)."
+        }
+      }
+    },
+    "gpioPin": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["gpio"],
+          "additionalProperties": false,
+          "properties": {
+            "gpio": {"type": "integer", "minimum": 0},
+            "active_high": {"type": "boolean"},
+            "driver": {"type": "string"}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["chip", "line"],
+          "additionalProperties": false,
+          "properties": {
+            "chip": {"type": "string"},
+            "line": {"type": "integer"},
+            "active_high": {"type": "boolean"},
+            "driver": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "severityActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "store": {"type": "boolean"},
+        "snapshot": {"type": "boolean"},
+        "buzzer": {"type": "boolean"},
+        "relay": {"type": "boolean"},
+        "leds": {"type": "boolean"},
+        "buzzer_pattern": {
+          "enum": ["steady", "beep_wait", "double_beep", "triple_beep", "chirp", "slow_pulse", "warble", "heartbeat", "continuous", "siren"],
+          "description": "Exactly AXA.Core.Alerts.buzzer_patterns()."
+        },
+        "led_pattern": {
+          "enum": ["chase", "pulse", "red", "blink", "double_flash", "rainbow", "breathe", "alternate", "knight", "flash"],
+          "description": "AXA.Core.Alerts.led_patterns() plus \"flash\": removed from the code but possibly still stored on boards from the build that had it (legacy round-trip tolerance; the UI whitelist prevents new writes of it)."
+        }
+      }
+    },
+    "wifiRow": {
+      "description": "Mirrors AXA.Fw.Network.validate/1: blank psk = open network; otherwise 8-63 chars or a 64-hex PMK. \"REDACTED\" from legacy files is 8 chars and passes as a string — the import's keep-stored-secrets merge remains the authority for it.",
+      "type": "object",
+      "required": ["ssid", "psk"],
+      "additionalProperties": false,
+      "properties": {
+        "ssid": {"type": "string", "minLength": 1},
+        "psk": {"anyOf": [{"enum": [""]}, {"type": "string", "minLength": 8, "maxLength": 64}]}
+      }
+    },
+    "cameraWrite": {
+      "description": "Writer-level camera shape; the document form composes over it with the stored id.",
+      "type": "object",
+      "required": ["name", "source_type"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 80},
+        "source_type": {"enum": ["rtsp", "hls", "mjpeg", "usb", "mipi", "file", "simulated"]},
+        "source_config_json": {"type": "object"},
+        "main_url": {"type": ["string", "null"]},
+        "sub_url": {"type": ["string", "null"]},
+        "enabled": {"type": "boolean"},
+        "position": {"type": "integer"},
+        "recording_enabled": {"type": "boolean"},
+        "recording_segment_s": {"type": "integer", "minimum": 5, "maximum": 3600},
+        "rotation": {"enum": [0, 180]},
+        "dynamic_scene": {"type": "boolean"}
+      },
+      "allOf": [
+        {"if": {"properties": {"source_type": {"const": "rtsp"}}, "required": ["source_type"]}, "then": {"properties": {"source_config_json": {"$ref": "#/$defs/rtspConfig"}}}},
+        {"if": {"properties": {"source_type": {"const": "hls"}}, "required": ["source_type"]}, "then": {"properties": {"source_config_json": {"$ref": "#/$defs/hlsConfig"}}}},
+        {"if": {"properties": {"source_type": {"const": "mjpeg"}}, "required": ["source_type"]}, "then": {"properties": {"source_config_json": {"$ref": "#/$defs/mjpegConfig"}}}},
+        {"if": {"properties": {"source_type": {"const": "usb"}}, "required": ["source_type"]}, "then": {"properties": {"source_config_json": {"$ref": "#/$defs/deviceConfig"}}}},
+        {"if": {"properties": {"source_type": {"const": "mipi"}}, "required": ["source_type"]}, "then": {"properties": {"source_config_json": {"$ref": "#/$defs/deviceConfig"}}}},
+        {"if": {"properties": {"source_type": {"const": "file"}}, "required": ["source_type"]}, "then": {"properties": {"source_config_json": {"$ref": "#/$defs/fileConfig"}}}},
+        {"if": {"properties": {"source_type": {"const": "simulated"}}, "required": ["source_type"]}, "then": {"properties": {"source_config_json": {"$ref": "#/$defs/simulatedConfig"}}}}
+      ]
+    },
+    "camera": {
+      "allOf": [
+        {"$ref": "#/$defs/cameraWrite"},
+        {"type": "object", "required": ["id"], "properties": {"id": {"type": "integer"}}}
+      ]
+    },
+    "rtspConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["main_url"],
+      "properties": {
+        "main_url": {"type": "string", "minLength": 1, "description": "No scheme check — mirrors today."},
+        "sub_url": {"type": ["string", "null"]},
+        "transport": {"enum": ["tcp", "udp"], "description": "Strings only — JSON storage is string-keyed; atoms never cross the boundary."},
+        "username": {"type": ["string", "null"]},
+        "password": {"type": ["string", "null"]}
+      }
+    },
+    "hlsConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["main_url"],
+      "properties": {
+        "main_url": {"type": ["string", "null"], "pattern": "^https?://[^/?#]+"},
+        "sub_url": {"type": ["string", "null"], "pattern": "^https?://[^/?#]+"},
+        "pace": {"type": "boolean"},
+        "fps": {"type": "number", "exclusiveMinimum": 0, "maximum": 240},
+        "username": {"type": ["string", "null"]},
+        "password": {"type": ["string", "null"]}
+      }
+    },
+    "mjpegConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["main_url"],
+      "properties": {
+        "main_url": {"type": ["string", "null"], "pattern": "^https?://[^/?#]+"},
+        "fps": {"type": "number", "exclusiveMinimum": 0, "maximum": 240},
+        "username": {"type": ["string", "null"]},
+        "password": {"type": ["string", "null"]}
+      }
+    },
+    "deviceConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device"],
+      "properties": {
+        "device": {"type": "string", "minLength": 1},
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "fps": {"type": "integer", "minimum": 1},
+        "input_format": {"type": "string"},
+        "v4l2_controls": {"type": "object", "description": "string→int/bool/string; values not range-checked today either."}
+      }
+    },
+    "fileConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "loop": {"type": "boolean"},
+        "pace": {"type": "boolean"},
+        "fps": {"type": "number", "exclusiveMinimum": 0, "maximum": 240},
+        "byte_rate": {"type": "integer", "minimum": 1}
+      }
+    },
+    "simulatedConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "loop": {"type": "boolean"},
+        "pace": {"type": "boolean"}
+      }
+    },
+    "point": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "x": {"type": "number", "minimum": 0, "maximum": 1},
+        "y": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "polygon": {"type": "array", "minItems": 3, "items": {"$ref": "#/$defs/point"}},
+    "namedPolygon": {
+      "type": "object",
+      "required": ["name", "points"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "points": {"$ref": "#/$defs/polygon"}
+      }
+    },
+    "functionalityInstance": {
+      "type": "object",
+      "required": ["camera_id", "functionality_id", "enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "camera_id": {"type": "integer"},
+        "functionality_id": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "No enum: a document from newer firmware may reference an unknown id; shape-valid, and Functionalities.enable fails it gracefully at apply."},
+        "enabled": {"type": "boolean"},
+        "config_json": {"type": "object"}
+      },
+      "allOf": [
+        {"if": {"properties": {"functionality_id": {"const": "stair-handrail-monitor"}}, "required": ["functionality_id"]}, "then": {"properties": {"config_json": {"$ref": "#/$defs/functionalityConfig/stair-handrail-monitor"}}}},
+        {"if": {"properties": {"functionality_id": {"const": "people-distance"}}, "required": ["functionality_id"]}, "then": {"properties": {"config_json": {"$ref": "#/$defs/functionalityConfig/people-distance"}}}},
+        {"if": {"properties": {"functionality_id": {"const": "depth-test"}}, "required": ["functionality_id"]}, "then": {"properties": {"config_json": {"$ref": "#/$defs/functionalityConfig/depth-test"}}}},
+        {"if": {"properties": {"functionality_id": {"const": "face-recognition"}}, "required": ["functionality_id"]}, "then": {"properties": {"config_json": {"$ref": "#/$defs/functionalityConfig/face-recognition"}}}}
+      ]
+    },
+    "functionalityConfig": {
+      "description": "Stored form of each functionality's instance config (normalized by AXA.Functionality.Settings.validate/2): defaults NOT required to be present — the engine merges them at read; `step` affordances intentionally not encoded.",
+      "type": "object",
+      "stair-handrail-monitor": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stair_areas", "handrails"],
+        "properties": {
+          "stair_areas": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/namedPolygon"}},
+          "handrails": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/namedPolygon"}},
+          "hand_size": {"type": "number", "minimum": 1},
+          "hands_off_threshold_seconds": {"type": "number", "minimum": 0.5},
+          "min_pose_run_seconds": {"type": "number", "minimum": 1},
+          "no_person_grace_seconds": {"type": "number", "minimum": 5}
+        }
+      },
+      "people-distance": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "warning_distance_m": {"type": "number", "minimum": 0.1},
+          "critical_distance_m": {"type": "number", "minimum": 0.1},
+          "reference_distance_m": {"type": "number", "minimum": 0.1},
+          "reference_torso_px": {"type": "number", "minimum": 1},
+          "shoulder_filter_enabled": {"type": "boolean"},
+          "shoulder_keypoint_conf": {"type": "number", "minimum": 0, "maximum": 1},
+          "hip_filter_enabled": {"type": "boolean"},
+          "hip_keypoint_conf": {"type": "number", "minimum": 0, "maximum": 1},
+          "face_filter_enabled": {"type": "boolean"},
+          "face_keypoint_conf": {"type": "number", "minimum": 0, "maximum": 1},
+          "detection_person_conf": {"type": "number", "minimum": 0, "maximum": 1},
+          "pose_person_conf": {"type": "number", "minimum": 0, "maximum": 1},
+          "min_pose_run_seconds": {"type": "number", "minimum": 1},
+          "no_person_grace_seconds": {"type": "number", "minimum": 5},
+          "event_repeat_seconds": {"type": "number", "minimum": 1},
+          "min_confirm_frames": {"type": "number", "minimum": 1},
+          "confirm_frame_ratio": {"type": "number", "minimum": 0.1, "maximum": 1},
+          "pose_model": {"enum": ["yolo11s_pose_832x480", "yolo11n_pose_832x480", "yolo11m_pose_832x480", "yolo11s_pose", "yolo11m_pose", "ntop_pose"]},
+          "pose_fps": {"type": "number", "minimum": 0.2, "maximum": 30},
+          "camera_kind": {"enum": ["rectilinear", "fisheye", "equisolid", "stereographic"]},
+          "camera_fov_degrees": {"type": "number", "minimum": 20, "maximum": 360}
+        }
+      },
+      "depth-test": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": {"enum": ["midas_v21_384", "midas_v21_small_256", "dpt_next_vit_large_384", "dpt_next_vit_large_384_wide", "depth_anything_v2_small_a8", "depth_anything_v2_small", "yolo26n-depth", "yolo26n-depth_wide", "yolo26s-depth", "yolo26s-depth_wide"]},
+          "opacity": {"type": "number", "minimum": 0, "maximum": 100},
+          "fps": {"type": "number", "minimum": 0.2, "maximum": 30}
+        }
+      },
+      "face-recognition": {
+        "description": "Zero-config functionality.",
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    "modelRow": {
+      "type": "object",
+      "required": ["name", "ep_preference"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string"},
+        "ep_preference": {"enum": ["auto", "cpu", "qnn", "gpu"]}
+      }
+    }
+  }
+}

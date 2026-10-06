@@ -16,12 +16,12 @@ defmodule PPNet do
       ...>   version: 4660,
       ...>   board_version: 17_185,
       ...>   boot_id: 87_372_886,
-      ...>   ppnet_version: 1,
+      ...>   ppnet_version: "0.2.0",
       ...>   datetime: ~U[2026-03-26 21:00:55.352750Z]
       ...> } |> PPNet.encode_message()
-      <<46, 1, 151, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101,
-        115, 116, 101, 114, 205, 18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 1, 206, 105,
-        197, 158, 135, 37, 216, 194, 76, 126, 139, 15, 150, 0>>
+      <<51, 1, 151, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101,
+        115, 116, 101, 114, 205, 18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 165, 48, 46,
+        50, 46, 48, 206, 105, 197, 158, 135, 43, 29, 69, 217, 24, 65, 68, 62, 0>>
 
       iex> %PPNet.Message.SingleCounter{
       ...>   kind: "bar",
@@ -133,7 +133,7 @@ defmodule PPNet do
       ...>   version: 4660,
       ...>   board_version: 17_185,
       ...>   boot_id: 87_372_886,
-      ...>   ppnet_version: 1,
+      ...>   ppnet_version: "0.2.0",
       ...>   datetime: ~U[2026-03-26 21:00:55Z]
       ...> }
       iex> hello |> PPNet.encode_message() |> PPNet.parse() |> Map.get(:messages) |> hd() == hello
@@ -191,9 +191,15 @@ defmodule PPNet do
   | 5    | `PPNet.Message.Image`               |
   | 6    | `PPNet.Message.ChunkedMessageHeader`|
   | 7    | `PPNet.Message.ChunkedMessageBody`  |
+  | 8    | `PPNet.Message.ChunkedMessageAck`   |
+  | 9    | `PPNet.Message.ConfigData`          |
+  | 10   | `PPNet.Message.ConfigAck`           |
   """
+  alias PPNet.Message.ChunkedMessageAck
   alias PPNet.Message.ChunkedMessageBody
   alias PPNet.Message.ChunkedMessageHeader
+  alias PPNet.Message.ConfigAck
+  alias PPNet.Message.ConfigData
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -203,9 +209,40 @@ defmodule PPNet do
 
   require Logger
 
+  @type message ::
+          Hello.t()
+          | SingleCounter.t()
+          | Ping.t()
+          | Event.t()
+          | Image.t()
+          | ChunkedMessageHeader.t()
+          | ChunkedMessageBody.t()
+          | ChunkedMessageAck.t()
+          | ConfigData.t()
+          | ConfigAck.t()
+
+  @type encode_message_opts :: [
+          limit: pos_integer(),
+          transaction_id: transaction_id(),
+          force_chunked: boolean(),
+          return_transaction_id: boolean(),
+          chunk_indexes: [non_neg_integer()],
+          return_header: boolean()
+        ]
+  @type transaction_id :: non_neg_integer()
+  @type stream :: Enumerable.t()
+
   # Reed-Solomon is limited to 255 bytes inclusive
   # Cops is limited to 255 bytes exclusive
   @limit 254
+  # | Field                 | Size    |
+  # |-----------------------|---------|
+  # | Message Type          | 1 byte  |
+  # | Reed-Solomon Parity   | 8 bytes |
+  # | COBS Overhead         | 1 byte  |
+  # | Frame Separator (0x00)| 1 byte  |
+  #  1 + byte_size(packaged_data) + 8 + 1 + 1
+  @frame_overhead 11
   # Minimun chunk size is 22 bytes because this is the size of ChunkedMessageHeader
   @min_chunk_size 22
   # Per-chunk overhead: type (1 byte) + transaction_id (4 bytes) + datetime (4 bytes)
@@ -215,6 +252,48 @@ defmodule PPNet do
 
   @delimiter <<0>>
 
+  @encode_opts_schema NimbleOptions.new!(
+                        limit: [
+                          type: :non_neg_integer,
+                          default: @limit,
+                          doc:
+                            "Maximum frame size in bytes. Clamped to the range `22..254`. The minimum of 22 " <>
+                              "matches the encoded size of a `ChunkedMessageHeader` frame — going below that " <>
+                              "would cause the header itself to be chunked. 254 is the COBS limit."
+                        ],
+                        return_transaction_id: [
+                          type: :boolean,
+                          default: false,
+                          doc: "When `true`, a chunked message returns `{transaction_id, frames}` instead of `frames`."
+                        ],
+                        transaction_id: [
+                          type: {:in, 0..0xFFFF_FFFF},
+                          doc:
+                            "Use this id instead of generating one. Needed to resend frames of an " <>
+                              "already-sent chunked message under the same id."
+                        ],
+                        force_chunked: [
+                          type: :boolean,
+                          default: false,
+                          doc: "Chunk the message even when it fits in a single frame."
+                        ],
+                        chunk_indexes: [
+                          type: {:list, :non_neg_integer},
+                          doc:
+                            "Only encode the body chunks with these indexes, to resend what a " <>
+                              "`ChunkedMessageAck` reported missing. Raises `ArgumentError` if an index is " <>
+                              "out of range for the message."
+                        ],
+                        return_header: [
+                          type: :boolean,
+                          default: false,
+                          doc:
+                            "Also return the `ChunkedMessageHeader` frame when `:chunk_indexes` is given " <>
+                              "(use `chunk_indexes: [], return_header: true` to encode only the header). " <>
+                              "Has no effect without `:chunk_indexes`, where the header is always included."
+                        ]
+                      )
+
   @hello_type_code 1
   @single_counter_type_code 2
   @ping_type_code 3
@@ -222,6 +301,9 @@ defmodule PPNet do
   @image_type_code 5
   @chunked_message_header_type_code 6
   @chunked_message_body_type_code 7
+  @chunked_message_ack_type_code 8
+  @config_data_type_code 9
+  @config_ack_type_code 10
 
   @type_codes [
     @hello_type_code,
@@ -230,7 +312,10 @@ defmodule PPNet do
     @event_type_code,
     @image_type_code,
     @chunked_message_header_type_code,
-    @chunked_message_body_type_code
+    @chunked_message_body_type_code,
+    @chunked_message_ack_type_code,
+    @config_data_type_code,
+    @config_ack_type_code
   ]
 
   @doc """
@@ -242,21 +327,34 @@ defmodule PPNet do
 
   ## Options
 
-  * `:limit` - Maximum frame size in bytes. Defaults to 254. Clamped to the range `22..254`.
-    The minimum of 22 matches the encoded size of a `ChunkedMessageHeader` frame — going below
-    that would cause the header itself to be chunked. 254 is the COBS limit.
+  #{NimbleOptions.docs(@encode_opts_schema)}
+
+  Options are validated up front: an invalid value or an unknown option raises
+  `NimbleOptions.ValidationError`, even when the message fits in a single frame.
   """
+  @spec encode_message(message :: message(), opts :: encode_message_opts()) ::
+          binary()
+          | [binary()]
+          | {transaction_id(), [binary()]}
   def encode_message(%module{} = message, opts \\ []) do
+    opts = NimbleOptions.validate!(opts, @encode_opts_schema)
+
     limit = get_limit(opts)
 
-    packaged_data = module.pack(message)
+    packaged_data = pack(message, limit)
 
-    if frame_size(packaged_data) <= limit do
+    if frame_size(packaged_data) <= limit and not opts[:force_chunked] do
       encode_frame(module.type_code(), packaged_data)
     else
-      packaged_data
-      |> chunked_frame_stream(module.datetime(message), module, opts)
-      |> Enum.to_list()
+      transaction_id = Keyword.get(opts, :transaction_id, gen_transaction_id())
+      return_transaction_id = Keyword.get(opts, :return_transaction_id, false)
+
+      result =
+        packaged_data
+        |> chunked_frame_stream(module.datetime(message), module, transaction_id, opts)
+        |> Enum.to_list()
+
+      if return_transaction_id, do: {transaction_id, result}, else: result
     end
   end
 
@@ -271,20 +369,35 @@ defmodule PPNet do
 
   Accepts the same options as `encode_message/2`.
   """
+  @spec encode_message_stream(message :: message(), opts :: encode_message_opts()) ::
+          [binary()]
+          | stream()
+          | {transaction_id(), stream()}
   def encode_message_stream(%module{} = message, opts \\ []) do
+    opts = NimbleOptions.validate!(opts, @encode_opts_schema)
+
     limit = get_limit(opts)
 
-    packaged_data = module.pack(message)
+    packaged_data = pack(message, limit)
 
-    if frame_size(packaged_data) <= limit do
+    if frame_size(packaged_data) <= limit and not opts[:force_chunked] do
       [encode_frame(module.type_code(), packaged_data)]
     else
-      chunked_frame_stream(packaged_data, module.datetime(message), module, opts)
+      transaction_id = Keyword.get(opts, :transaction_id, gen_transaction_id())
+      return_transaction_id = Keyword.get(opts, :return_transaction_id, false)
+
+      result = chunked_frame_stream(packaged_data, module.datetime(message), module, transaction_id, opts)
+
+      if return_transaction_id, do: {transaction_id, result}, else: result
     end
   end
 
+  @spec frame_overhead() :: pos_integer()
+  def frame_overhead, do: @frame_overhead
+
   # type (1 byte) + packaged_data + Reed-Solomon overhead (8 bytes) + COBS overhead (1 byte) + separator (1 byte)
-  defp frame_size(packaged_data), do: 1 + byte_size(packaged_data) + 8 + 1 + 1
+  # = 1 + byte_size(packaged_data) + 8 + 1 + 1
+  defp frame_size(packaged_data), do: byte_size(packaged_data) + @frame_overhead
 
   defp encode_frame(type_code, packaged_data) do
     message = <<
@@ -297,8 +410,24 @@ defmodule PPNet do
     IO.iodata_to_binary([PPNet.Cobs.encode_iodata!(rs_encoded), @delimiter])
   end
 
-  defp chunked_frame_stream(binary, datetime, module, opts) do
+  defp chunked_frame_stream(binary, datetime, module, transaction_id, opts) do
     limit = get_limit(opts)
+    frame_opts = [limit: limit]
+    chunk_size = chunk_size!(limit)
+    total_chunks = div(byte_size(binary) + chunk_size - 1, chunk_size)
+
+    {indexes, with_header?} = select_frames(opts[:chunk_indexes], opts[:return_header], total_chunks)
+    bodies = encode_chunks_stream(binary, datetime, transaction_id, chunk_size, indexes, frame_opts)
+
+    if with_header? do
+      header = encode_header(module, transaction_id, datetime, total_chunks, frame_opts)
+      Stream.concat([header], bodies)
+    else
+      bodies
+    end
+  end
+
+  defp chunk_size!(limit) do
     chunk_size = limit - @chunk_header_size
 
     if chunk_size == 0 do
@@ -306,43 +435,47 @@ defmodule PPNet do
             "limit #{limit} leaves no room for chunk data (per-chunk overhead is #{@chunk_header_size} bytes)"
     end
 
-    transaction_id = transaction_id()
-    total_chunks = div(byte_size(binary) + chunk_size - 1, chunk_size)
-
-    header = %ChunkedMessageHeader{
-      message_module: module,
-      transaction_id: transaction_id,
-      datetime: datetime,
-      total_chunks: total_chunks
-    }
-
-    bodies =
-      binary
-      |> chunk_stream(chunk_size)
-      |> Stream.with_index()
-      |> Stream.map(fn {chunk, index} ->
-        encode_message(
-          %ChunkedMessageBody{
-            transaction_id: transaction_id,
-            datetime: datetime,
-            chunk_index: index,
-            chunk_size: byte_size(chunk),
-            chunk_data: chunk
-          },
-          opts
-        )
-      end)
-
-    Stream.concat([encode_message(header, opts)], bodies)
+    chunk_size
   end
 
-  # Chunks must stay sub-binaries into the payload — chunking through a byte
-  # list transiently allocates ~32x the payload size on a 64-bit BEAM.
-  defp chunk_stream(binary, chunk_size) do
-    Stream.unfold(binary, fn
-      <<>> -> nil
-      <<chunk::binary-size(chunk_size), rest::binary>> -> {chunk, rest}
-      last_chunk -> {last_chunk, <<>>}
+  # without chunk_indexes: every chunk, and the header is always included
+  defp select_frames(nil, _return_header, total_chunks), do: {0..(total_chunks - 1), true}
+
+  defp select_frames(chunk_indexes, return_header, total_chunks) do
+    check_chunck_indexes!(chunk_indexes, total_chunks)
+    {chunk_indexes, return_header}
+  end
+
+  defp encode_header(module, transaction_id, datetime, total_chunks, opts) do
+    encode_message(
+      %ChunkedMessageHeader{
+        message_module: module,
+        transaction_id: transaction_id,
+        datetime: datetime,
+        total_chunks: total_chunks
+      },
+      opts
+    )
+  end
+
+  defp encode_chunks_stream(binary, datetime, transaction_id, chunk_size, chunk_indices, opts) do
+    data_size = byte_size(binary)
+
+    Stream.map(chunk_indices, fn index ->
+      offset = index * chunk_size
+      length = min(chunk_size, data_size - offset)
+      chunk = :binary.part(binary, offset, length)
+
+      encode_message(
+        %ChunkedMessageBody{
+          transaction_id: transaction_id,
+          datetime: datetime,
+          chunk_index: index,
+          chunk_size: byte_size(chunk),
+          chunk_data: chunk
+        },
+        opts
+      )
     end)
   end
 
@@ -491,8 +624,11 @@ defmodule PPNet do
   defp to_message_type(@image_type_code), do: Image
   defp to_message_type(@chunked_message_header_type_code), do: ChunkedMessageHeader
   defp to_message_type(@chunked_message_body_type_code), do: ChunkedMessageBody
+  defp to_message_type(@chunked_message_ack_type_code), do: ChunkedMessageAck
+  defp to_message_type(@config_data_type_code), do: ConfigData
+  defp to_message_type(@config_ack_type_code), do: ConfigAck
 
-  defp transaction_id do
+  defp gen_transaction_id do
     <<int::unsigned-integer-size(4)-unit(8)>> = :crypto.strong_rand_bytes(4)
     int
   end
@@ -505,6 +641,20 @@ defmodule PPNet do
       is_integer(limit) and limit < @min_chunk_size -> @min_chunk_size
       is_integer(limit) and limit <= @limit -> limit
       true -> @limit
+    end
+  end
+
+  defp pack(%module{} = message, limit) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :pack, 2) do
+      module.pack(message, limit)
+    else
+      module.pack(message)
+    end
+  end
+
+  defp check_chunck_indexes!(indexes, total_chunks) do
+    for index <- indexes, index < 0 or index >= total_chunks do
+      raise ArgumentError, "chunk index #{index} is out of range (0..#{total_chunks - 1})"
     end
   end
 end
