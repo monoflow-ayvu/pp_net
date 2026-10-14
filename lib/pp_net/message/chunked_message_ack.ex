@@ -67,13 +67,14 @@ defmodule PPNet.Message.ChunkedMessageAck do
     max_size = max_missing_chunks_size(limit)
 
     if missing_chunks_size <= max_size do
-      <<
-        transaction_id::unsigned-integer-size(4)-unit(8),
-        @status_codes[status]::unsigned-integer-size(1)-unit(8),
-        missing_chunks_size::unsigned-integer-size(1)-unit(8),
-        missing_chunks_binary::binary-size(missing_chunks_size)-unit(8),
-        DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8)
-      >>
+      {:ok,
+       <<
+         transaction_id::unsigned-integer-size(4)-unit(8),
+         @status_codes[status]::unsigned-integer-size(1)-unit(8),
+         missing_chunks_size::unsigned-integer-size(1)-unit(8),
+         missing_chunks_binary::binary-size(missing_chunks_size)-unit(8),
+         DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8)
+       >>}
     else
       {:error,
        %PackError{

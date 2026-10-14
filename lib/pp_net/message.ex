@@ -3,12 +3,13 @@ defmodule PPNet.Message do
   This module defines the `PPNet.Message` protocol, which provides functions to pack
   and parse messages.
   """
+  alias PPNet.PackError
   alias PPNet.ParseError
 
   @optional_callbacks pack: 2
 
-  @callback pack(message :: struct()) :: binary()
-  @callback pack(message :: struct(), limit :: pos_integer()) :: binary()
+  @callback pack(message :: struct()) :: {:ok, binary()} | {:error, PackError.t()}
+  @callback pack(message :: struct(), limit :: pos_integer()) :: {:ok, binary()} | {:error, PackError.t()}
   @callback parse(data :: binary()) :: {:ok, struct()} | {:error, %ParseError{}}
   @callback datetime(message :: struct()) :: DateTime.t()
   @callback type_code() :: non_neg_integer()

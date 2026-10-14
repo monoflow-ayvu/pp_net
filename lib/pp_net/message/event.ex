@@ -45,10 +45,11 @@ defmodule PPNet.Message.Event do
       when kind in @valid_event_kinds and is_map(data) do
     verify_data!(data)
 
-    Msgpax.pack!(
-      [@event_kind_to_code[kind], data, DateTime.to_unix(datetime)],
-      iodata: false
-    )
+    {:ok,
+     Msgpax.pack!(
+       [@event_kind_to_code[kind], data, DateTime.to_unix(datetime)],
+       iodata: false
+     )}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}

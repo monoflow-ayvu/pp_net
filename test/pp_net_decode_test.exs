@@ -727,6 +727,12 @@ defmodule PPNetTest do
     test "parse/1 with valid binary data" do
       payload = File.read!("test/support/static/image.webp")
 
+      {:ok, frames} =
+        PPNet.encode_message(
+          %Image{id: UUID.uuid4(), data: payload, format: :webp, datetime: ~U[2026-03-27 20:15:41Z]},
+          limit: 200
+        )
+
       assert %{
                messages: [
                  %ChunkedMessageHeader{
@@ -739,8 +745,7 @@ defmodule PPNetTest do
                ],
                errors: []
              } =
-               %Image{id: UUID.uuid4(), data: payload, format: :webp, datetime: ~U[2026-03-27 20:15:41Z]}
-               |> PPNet.encode_message(limit: 200)
+               frames
                |> Enum.join()
                |> PPNet.parse()
 
@@ -770,12 +775,14 @@ defmodule PPNetTest do
       # Start code + filler large enough to span several 200-byte chunks.
       data = <<0, 0, 0, 1>> <> :binary.copy(<<0xAA>>, 500)
 
+      {:ok, frames} =
+        PPNet.encode_message(%Image{id: id, data: data, format: :h264, datetime: ~U[2026-03-27 20:15:41Z]}, limit: 200)
+
       assert %{
                messages: [%ChunkedMessageHeader{message_module: Image} = header | chunks],
                errors: []
              } =
-               %Image{id: id, data: data, format: :h264, datetime: ~U[2026-03-27 20:15:41Z]}
-               |> PPNet.encode_message(limit: 200)
+               frames
                |> Enum.join()
                |> PPNet.parse()
 
@@ -866,7 +873,7 @@ defmodule PPNetTest do
         datetime: ~U[2026-03-27 13:20:43Z]
       }
 
-      [header_bin | _chunks] = PPNet.encode_message(message, limit: 30)
+      {:ok, [header_bin | _chunks]} = PPNet.encode_message(message, limit: 30)
 
       assert %{
                messages: [%ChunkedMessageHeader{message_module: SingleCounter}],
@@ -973,7 +980,7 @@ defmodule PPNetTest do
     end
 
     test "decode multiple messages" do
-      hello =
+      {:ok, hello} =
         PPNet.encode_message(%Hello{
           board_identifier: "Tester",
           board_version: 17_185,
@@ -984,7 +991,7 @@ defmodule PPNetTest do
           datetime: ~U[2026-03-26 21:00:55.352750Z]
         })
 
-      single_counter =
+      {:ok, single_counter} =
         PPNet.encode_message(%SingleCounter{
           duration_ms: 1500,
           kind: "bar",
@@ -993,7 +1000,7 @@ defmodule PPNetTest do
           datetime: ~U[2026-03-27 13:20:43Z]
         })
 
-      ping =
+      {:ok, ping} =
         PPNet.encode_message(%Ping{
           session_id: "5388724c-457e-4332-a98c-e67b2053662c",
           temperature: 25.0,
@@ -1009,7 +1016,7 @@ defmodule PPNetTest do
           storage: %{total: 1000, used: 500}
         })
 
-      event =
+      {:ok, event} =
         PPNet.encode_message(%Event{
           kind: :detection,
           data: %{"sensor_id" => 1, "value" => 100},
@@ -1018,7 +1025,7 @@ defmodule PPNetTest do
 
       image = File.read!("test/support/static/image.webp")
 
-      [image_header | image_chunks] =
+      {:ok, [image_header | image_chunks]} =
         PPNet.encode_message(
           %Image{id: UUID.uuid4(), data: image, format: :webp, datetime: ~U[2026-03-27 20:15:41Z]},
           limit: 200

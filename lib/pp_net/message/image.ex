@@ -64,13 +64,14 @@ defmodule PPNet.Message.Image do
        when is_binary(id) and is_binary(data) do
     data_size = byte_size(data)
 
-    <<
-      UUID.string_to_binary!(id)::binary-size(16)-unit(8),
-      @format_to_code[format]::unsigned-integer-size(1)-unit(8),
-      DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
-      data_size::unsigned-integer-size(4)-unit(8),
-      data::binary-size(data_size)-unit(8)
-    >>
+    {:ok,
+     <<
+       UUID.string_to_binary!(id)::binary-size(16)-unit(8),
+       @format_to_code[format]::unsigned-integer-size(1)-unit(8),
+       DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
+       data_size::unsigned-integer-size(4)-unit(8),
+       data::binary-size(data_size)-unit(8)
+     >>}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}

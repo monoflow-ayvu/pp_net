@@ -134,22 +134,23 @@ defmodule PPNet.Message.Ping do
              used,
              extra
            ) do
-    Msgpax.pack!(
-      [
-        pack_session_id(session_id),
-        temperature,
-        uptime_ms,
-        pack_location(location),
-        cpu,
-        tpu_memory_percent,
-        tpu_ping_ms,
-        pack_wifi(wifi),
-        pack_storage(storage),
-        DateTime.to_unix(datetime),
-        extra
-      ],
-      iodata: false
-    )
+    {:ok,
+     Msgpax.pack!(
+       [
+         pack_session_id(session_id),
+         temperature,
+         uptime_ms,
+         pack_location(location),
+         cpu,
+         tpu_memory_percent,
+         tpu_ping_ms,
+         pack_wifi(wifi),
+         pack_storage(storage),
+         DateTime.to_unix(datetime),
+         extra
+       ],
+       iodata: false
+     )}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}

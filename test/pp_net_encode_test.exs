@@ -73,7 +73,9 @@ defmodule PpnetEncodeTest do
           datetime: ~U[2026-03-26 21:00:55.352750Z]
         }
 
-      assert PPNet.encode_message(message) ==
+      assert {:ok, frame} = PPNet.encode_message(message)
+
+      assert frame ==
                <<51, 1, 151, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101, 115, 116, 101, 114, 205,
                  18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 165, 48, 46, 50, 46, 48, 206, 105, 197, 158, 135, 43, 29, 69,
                  217, 24, 65, 68, 62, 0>>
@@ -90,7 +92,7 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-26 21:00:55Z]
       }
 
-      [encoded_header | encoded_chunks] = PPNet.encode_message(hello, limit: 35)
+      {:ok, [encoded_header | encoded_chunks]} = PPNet.encode_message(hello, limit: 35)
 
       assert %{messages: [decoded_header | decoded_chunks], errors: []} =
                [encoded_header | encoded_chunks]
@@ -144,7 +146,9 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 12:58:06Z]
       }
 
-      assert PPNet.encode_message(message) ==
+      assert {:ok, frame} = PPNet.encode_message(message)
+
+      assert frame ==
                <<0x08, 0x02, 0x95, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x11, 0xCD, 0x05, 0xDC, 0xCE, 0x69, 0xC6, 0x7E, 0xDE,
                  0x34, 0x40, 0x8D, 0x2C, 0x55, 0xEE, 0xF9, 0x2D, 0x00>>
     end
@@ -195,7 +199,9 @@ defmodule PpnetEncodeTest do
           storage: %{total: 1000, used: 500}
         }
 
-      assert PPNet.encode_message(message) ==
+      assert {:ok, frame} = PPNet.encode_message(message)
+
+      assert frame ==
                <<0x04, 0x03, 0x9B, 0xDC, 0x19, 0x10, 0x53, 0xCC, 0x88, 0x72, 0x4C, 0x45, 0x7E, 0x43, 0x32, 0xCC, 0xA9,
                  0xCC, 0x8C, 0xCC, 0xE6, 0x7B, 0x20, 0x53, 0x66, 0x2C, 0xCB, 0x40, 0x39, 0x01, 0x01, 0x01, 0x01, 0x01,
                  0x02, 0xCE, 0x1D, 0x01, 0x86, 0xA0, 0x93, 0xCB, 0x40, 0x44, 0x5B, 0x3D, 0x6F, 0x56, 0xFA, 0xE4, 0xCB,
@@ -220,7 +226,9 @@ defmodule PpnetEncodeTest do
         storage: %{total: 1000, used: 500}
       }
 
-      assert PPNet.encode_message(message) ==
+      assert {:ok, frame} = PPNet.encode_message(message)
+
+      assert frame ==
                <<0x04, 0x03, 0x9B, 0xDC, 0x19, 0x10, 0x53, 0xCC, 0x88, 0x72, 0x4C, 0x45, 0x7E, 0x43, 0x32, 0xCC, 0xA9,
                  0xCC, 0x8C, 0xCC, 0xE6, 0x7B, 0x20, 0x53, 0x66, 0x2C, 0xCB, 0x40, 0x39, 0x01, 0x01, 0x01, 0x01, 0x01,
                  0x1D, 0xCD, 0x03, 0xE8, 0x93, 0xCB, 0x40, 0x44, 0x5B, 0x3D, 0x6F, 0x56, 0xFA, 0xE4, 0xCB, 0xC0, 0x52,
@@ -260,7 +268,7 @@ defmodule PpnetEncodeTest do
         }
       }
 
-      [encoded_header | encoded_chunks] = PPNet.encode_message(message, limit: 200)
+      {:ok, [encoded_header | encoded_chunks]} = PPNet.encode_message(message, limit: 200)
 
       assert %{messages: [decoded_header | decoded_chunks], errors: []} =
                [encoded_header | encoded_chunks]
@@ -312,11 +320,14 @@ defmodule PpnetEncodeTest do
 
   describe "encode PPNet.Message.Event" do
     test "encode/1 with valid data" do
-      assert PPNet.encode_message(%Event{
-               kind: :detection,
-               data: %{sensor_id: 1, value: 100},
-               datetime: ~U[2026-03-27 18:46:39Z]
-             }) ==
+      assert {:ok, frame} =
+               PPNet.encode_message(%Event{
+                 kind: :detection,
+                 data: %{sensor_id: 1, value: 100},
+                 datetime: ~U[2026-03-27 18:46:39Z]
+               })
+
+      assert frame ==
                <<0x24, 0x04, 0x93, 0x01, 0x82, 0xA9, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F, 0x69, 0x64, 0x01, 0xA5,
                  0x76, 0x61, 0x6C, 0x75, 0x65, 0x64, 0xCE, 0x69, 0xC6, 0xD0, 0x8F, 0x89, 0x5B, 0x7B, 0xB2, 0xB9, 0x23,
                  0xC1, 0x2C, 0x00>>
@@ -355,7 +366,9 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 18:46:39Z]
       }
 
-      assert PPNet.encode_message(event) ==
+      assert {:ok, frame} = PPNet.encode_message(event)
+
+      assert frame ==
                <<0x0F, 0x04, 0x93, 0x01, 0x82, 0xA8, 0x69, 0x6D, 0x61, 0x67, 0x65, 0x5F, 0x69, 0x64, 0xDC, 0x2B, 0x10,
                  0xCC, 0x99, 0x7A, 0x60, 0x60, 0xCC, 0xD3, 0xCC, 0x84, 0x4A, 0x35, 0xCC, 0x85, 0x07, 0x3E, 0xCC, 0xEA,
                  0xCC, 0xD1, 0xCC, 0xAE, 0xCC, 0xD5, 0x1E, 0xA1, 0x64, 0x93, 0x83, 0xA1, 0x73, 0xCB, 0x3F, 0xE1, 0x40,
@@ -379,7 +392,7 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 18:46:39Z]
       }
 
-      [encoded_header | encoded_chunks] = PPNet.encode_message(message, limit: 35)
+      {:ok, [encoded_header | encoded_chunks]} = PPNet.encode_message(message, limit: 35)
 
       assert %{messages: [decoded_header | decoded_chunks], errors: []} =
                [encoded_header | encoded_chunks]
@@ -407,9 +420,10 @@ defmodule PpnetEncodeTest do
     end
 
     test "pack/1 accepts data with valid UTF-8 string values" do
-      assert is_binary(
+      assert {:ok, packed} =
                Event.pack(%Event{kind: :detection, data: %{"label" => "valid string"}, datetime: DateTime.utc_now()})
-             )
+
+      assert is_binary(packed)
     end
 
     test "pack/1 returns error when data contains invalid binary" do
@@ -449,7 +463,7 @@ defmodule PpnetEncodeTest do
 
       id = UUID.uuid4()
 
-      [header | chunks] =
+      {:ok, [header | chunks]} =
         PPNet.encode_message(
           %Image{
             id: id,
@@ -504,10 +518,15 @@ defmodule PpnetEncodeTest do
     test "encode/1 with valid data without limit uses default limit of 254" do
       image = File.read!("test/support/static/image.webp")
 
-      messages =
-        %Image{id: UUID.uuid4(), data: image, format: :webp, datetime: ~U[2026-03-27 20:15:41Z]}
-        |> PPNet.encode_message()
-        |> Enum.join()
+      {:ok, frames} =
+        PPNet.encode_message(%Image{
+          id: UUID.uuid4(),
+          data: image,
+          format: :webp,
+          datetime: ~U[2026-03-27 20:15:41Z]
+        })
+
+      messages = Enum.join(frames)
 
       assert %{
                errors: [],
@@ -563,7 +582,8 @@ defmodule PpnetEncodeTest do
       # Only the leading start code is validated; the trailing bytes are opaque payload.
       data = <<0, 0, 1>> <> "frame"
 
-      packed = Image.pack(%Image{id: UUID.uuid4(), format: :h264, data: data, datetime: ~U[2026-03-27 20:15:41Z]})
+      {:ok, packed} =
+        Image.pack(%Image{id: UUID.uuid4(), format: :h264, data: data, datetime: ~U[2026-03-27 20:15:41Z]})
 
       assert {:ok, %Image{format: :h264, data: ^data}} = Image.parse(packed)
     end
@@ -571,7 +591,8 @@ defmodule PpnetEncodeTest do
     test "pack/1 accepts H.264 data with a 4-byte Annex-B start code" do
       data = <<0, 0, 0, 1>> <> "frame"
 
-      packed = Image.pack(%Image{id: UUID.uuid4(), format: :h264, data: data, datetime: ~U[2026-03-27 20:15:41Z]})
+      {:ok, packed} =
+        Image.pack(%Image{id: UUID.uuid4(), format: :h264, data: data, datetime: ~U[2026-03-27 20:15:41Z]})
 
       assert {:ok, %Image{format: :h264, data: ^data}} = Image.parse(packed)
     end
@@ -600,7 +621,7 @@ defmodule PpnetEncodeTest do
     end
 
     test "when transaction_id is given, it is used instead of generating one", %{image: image} do
-      [header_bin | _chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 42)
+      {:ok, [header_bin | _chunks]} = PPNet.encode_message(image, limit: 200, transaction_id: 42)
 
       assert %{messages: [%ChunkedMessageHeader{transaction_id: 42}], errors: []} = PPNet.parse(header_bin)
     end
@@ -608,10 +629,11 @@ defmodule PpnetEncodeTest do
     test "return a tuple of transaction_id and chunks when return_transaction_id: true", %{image: image} do
       # pin transaction_id on both calls — without it each call generates its own random id,
       # so the frames (which embed transaction_id) would never compare equal
-      default = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+      {:ok, default} = PPNet.encode_message(image, limit: 200, transaction_id: 7)
       assert is_list(default)
 
-      assert {7, ^default} = PPNet.encode_message(image, limit: 200, transaction_id: 7, return_transaction_id: true)
+      assert {:ok, {7, ^default}} =
+               PPNet.encode_message(image, limit: 200, transaction_id: 7, return_transaction_id: true)
     end
 
     test "when the encoded message is a single frame, `return_transaction_id: true` is a no-op" do
@@ -626,9 +648,9 @@ defmodule PpnetEncodeTest do
     end
 
     test "chunk_indexes: [...] returns only those body chunks, no header", %{image: image} do
-      [_header | all_chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+      {:ok, [_header | all_chunks]} = PPNet.encode_message(image, limit: 200, transaction_id: 7)
 
-      chunks_to_resend = PPNet.encode_message(image, limit: 200, transaction_id: 7, chunk_indexes: [3, 5])
+      {:ok, chunks_to_resend} = PPNet.encode_message(image, limit: 200, transaction_id: 7, chunk_indexes: [3, 5])
 
       # The chunks generated for retransmission must be exactly the same as the original chunks.
       assert chunks_to_resend == [Enum.at(all_chunks, 3), Enum.at(all_chunks, 5)]
@@ -641,40 +663,43 @@ defmodule PpnetEncodeTest do
     end
 
     test "encode_message_stream/2 accepts the same chunk_indexes option", %{image: image} do
-      [_header | all_chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+      {:ok, [_header | all_chunks]} = PPNet.encode_message(image, limit: 200, transaction_id: 7)
 
       # It continues to return a stream normally.
-      assert %Stream{} = stream = PPNet.encode_message_stream(image, limit: 200, transaction_id: 7, chunk_indexes: [3])
+      assert {:ok, %Stream{} = stream} =
+               PPNet.encode_message_stream(image, limit: 200, transaction_id: 7, chunk_indexes: [3])
+
       assert Enum.to_list(stream) == [Enum.at(all_chunks, 3)]
     end
 
     test "return_header: true adds the header to the chunks selected by chunk_indexes", %{image: image} do
-      [header | all_chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+      {:ok, [header | all_chunks]} = PPNet.encode_message(image, limit: 200, transaction_id: 7)
 
       opts = [limit: 200, transaction_id: 7, chunk_indexes: [3, 5], return_header: true]
 
-      assert PPNet.encode_message(image, opts) == [header, Enum.at(all_chunks, 3), Enum.at(all_chunks, 5)]
+      assert PPNet.encode_message(image, opts) == {:ok, [header, Enum.at(all_chunks, 3), Enum.at(all_chunks, 5)]}
     end
 
     test "chunk_indexes: [] with return_header: true encodes only the header", %{image: image} do
-      [header | _chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+      {:ok, [header | _chunks]} = PPNet.encode_message(image, limit: 200, transaction_id: 7)
 
       opts = [limit: 200, transaction_id: 7, chunk_indexes: [], return_header: true]
 
-      assert PPNet.encode_message(image, opts) == [header]
+      assert PPNet.encode_message(image, opts) == {:ok, [header]}
     end
 
     test "return_header: false keeps chunk_indexes chunks-only", %{image: image} do
-      [_header | all_chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+      {:ok, [_header | all_chunks]} = PPNet.encode_message(image, limit: 200, transaction_id: 7)
 
       opts = [limit: 200, transaction_id: 7, chunk_indexes: [3], return_header: false]
 
-      assert PPNet.encode_message(image, opts) == [Enum.at(all_chunks, 3)]
+      assert PPNet.encode_message(image, opts) == {:ok, [Enum.at(all_chunks, 3)]}
     end
 
     test "return_header has no effect without chunk_indexes, the header is always included", %{image: image} do
       all_frames = PPNet.encode_message(image, limit: 200, transaction_id: 7)
 
+      assert {:ok, [_header | _chunks]} = all_frames
       assert PPNet.encode_message(image, limit: 200, transaction_id: 7, return_header: true) == all_frames
       assert PPNet.encode_message(image, limit: 200, transaction_id: 7, return_header: false) == all_frames
     end
@@ -686,11 +711,12 @@ defmodule PpnetEncodeTest do
     end
 
     test "encode_message_stream/2 accepts return_header", %{image: image} do
-      [header | all_chunks] = PPNet.encode_message(image, limit: 200, transaction_id: 7)
+      {:ok, [header | all_chunks]} = PPNet.encode_message(image, limit: 200, transaction_id: 7)
 
       opts = [limit: 200, transaction_id: 7, chunk_indexes: [3], return_header: true]
 
-      assert Enum.to_list(PPNet.encode_message_stream(image, opts)) == [header, Enum.at(all_chunks, 3)]
+      assert {:ok, stream} = PPNet.encode_message_stream(image, opts)
+      assert Enum.to_list(stream) == [header, Enum.at(all_chunks, 3)]
     end
   end
 
@@ -701,11 +727,12 @@ defmodule PpnetEncodeTest do
     end
 
     test "a message that fits in one frame is a single binary by default", %{message: message} do
-      assert is_binary(PPNet.encode_message(message))
+      assert {:ok, frame} = PPNet.encode_message(message)
+      assert is_binary(frame)
     end
 
     test "force_chunked: true splits it into a header and a chunk anyway", %{message: message} do
-      assert [_header_bin | _chunk_bins] = frames = PPNet.encode_message(message, force_chunked: true)
+      assert {:ok, [_header_bin | _chunk_bins] = frames} = PPNet.encode_message(message, force_chunked: true)
 
       assert %{
                messages: [%ChunkedMessageHeader{message_module: SingleCounter, total_chunks: 1} = header | chunks],
@@ -718,25 +745,22 @@ defmodule PpnetEncodeTest do
     end
 
     test "force_chunked: true works with transaction_id and return_transaction_id", %{message: message} do
-      assert {42, [header_bin, _chunk_bin]} =
+      assert {:ok, {42, [header_bin, _chunk_bin]}} =
                PPNet.encode_message(message, force_chunked: true, transaction_id: 42, return_transaction_id: true)
 
       assert %{messages: [%ChunkedMessageHeader{transaction_id: 42}], errors: []} = PPNet.parse(header_bin)
     end
 
     test "force_chunked: true works with chunk_indexes", %{message: message} do
-      [_header | [chunk]] = PPNet.encode_message(message, force_chunked: true, transaction_id: 42)
+      {:ok, [_header | [chunk]]} = PPNet.encode_message(message, force_chunked: true, transaction_id: 42)
 
-      assert PPNet.encode_message(message, force_chunked: true, transaction_id: 42, chunk_indexes: [0]) == [chunk]
+      assert PPNet.encode_message(message, force_chunked: true, transaction_id: 42, chunk_indexes: [0]) ==
+               {:ok, [chunk]}
     end
 
     test "encode_message_stream/2 also honors force_chunked", %{message: message} do
-      frames =
-        message
-        |> PPNet.encode_message_stream(force_chunked: true)
-        |> Enum.to_list()
-
-      assert [_header_bin, _chunk_bin] = frames
+      assert {:ok, stream} = PPNet.encode_message_stream(message, force_chunked: true)
+      assert [_header_bin, _chunk_bin] = Enum.to_list(stream)
     end
 
     test "force_chunked: false keeps the single frame", %{message: message} do
@@ -776,7 +800,7 @@ defmodule PpnetEncodeTest do
 
     test "transaction_id accepts the whole 4-byte range", %{message: message} do
       for transaction_id <- [0, 4_294_967_295] do
-        assert {^transaction_id, [_header, _chunk]} =
+        assert {:ok, {^transaction_id, [_header, _chunk]}} =
                  PPNet.encode_message(message,
                    force_chunked: true,
                    transaction_id: transaction_id,
@@ -788,6 +812,93 @@ defmodule PpnetEncodeTest do
     test "an out-of-range limit is clamped instead of rejected", %{message: message} do
       assert PPNet.encode_message(message, limit: 9999) == PPNet.encode_message(message, limit: 254)
       assert PPNet.encode_message(message, limit: 0) == PPNet.encode_message(message, limit: 22)
+    end
+  end
+
+  describe "encode_message/2 pack errors" do
+    setup do
+      {
+        :ok,
+        # kind must be a binary
+        invalid_message: %SingleCounter{kind: 123, value: 1, pulses: 0, duration_ms: 10, datetime: DateTime.utc_now()},
+        ack: %ChunkedMessageAck{
+          transaction_id: 1,
+          status: :ok,
+          missing_chunks: [],
+          datetime: ~U[2026-03-27 16:25:12Z]
+        }
+      }
+    end
+
+    test "an invalid struct returns an error instead of raising", %{invalid_message: message} do
+      assert {:error, %PPNet.PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}} =
+               PPNet.encode_message(message)
+    end
+
+    test "a ConfigData payload that does not validate returns the validation error" do
+      message = %ConfigData{
+        kind: :full_report,
+        request_id: 1,
+        format: :json,
+        compression: :none,
+        # a report must carry "version" and "revision"
+        request_payload: %{"settings" => %{}},
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert {:error, %PPNet.PackError{reason: {%ArgumentError{message: reason_message}, _stacktrace}}} =
+               PPNet.encode_message(message)
+
+      assert reason_message =~ "version and revision"
+    end
+
+    test "return_transaction_id: true still returns the plain error", %{invalid_message: message} do
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               PPNet.encode_message(message, return_transaction_id: true)
+
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               PPNet.encode_message_stream(message, return_transaction_id: true)
+    end
+
+    test "encode_message_stream/2 returns the error before producing any frame", %{invalid_message: message} do
+      assert {:error, %PPNet.PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}} =
+               PPNet.encode_message_stream(message)
+    end
+
+    test "force_chunked: true on a message type that cannot be chunked returns :cannot_be_chunked", %{ack: ack} do
+      expected =
+        {:error,
+         %PPNet.PackError{
+           message: "PPNet.Message.ChunkedMessageAck cannot be chunked",
+           reason: :cannot_be_chunked,
+           data: %{message_module: ChunkedMessageAck}
+         }}
+
+      assert PPNet.encode_message(ack, force_chunked: true) == expected
+      assert PPNet.encode_message_stream(ack, force_chunked: true) == expected
+    end
+
+    test "chunk_indexes without the header still returns :cannot_be_chunked for a type that cannot be chunked", %{
+      ack: ack
+    } do
+      assert {:error, %PPNet.PackError{reason: :cannot_be_chunked, data: %{message_module: ChunkedMessageAck}}} =
+               PPNet.encode_message(ack, force_chunked: true, chunk_indexes: [0])
+    end
+
+    test "a ChunkedMessageAck whose missing_chunks do not fit in one frame returns :too_many_missing_chunks", %{
+      ack: ack
+    } do
+      # 116 entries, three of them with gaps of 16384 or more (3 varint bytes each): 235 encoded bytes
+      missing_chunks = [16_384, 32_768, 49_152] ++ Enum.map(1..113, &(49_152 + &1 * 128))
+
+      message = %{ack | status: :incomplete, missing_chunks: missing_chunks}
+
+      assert {:error,
+              %PPNet.PackError{
+                message: "missing_chunks takes 235 bytes encoded, exceeds the maximum of 233 for limit 254",
+                reason: :too_many_missing_chunks,
+                data: %{count: 116, size: 235, max_size: 233, limit: 254}
+              }} = PPNet.encode_message(message)
     end
   end
 
@@ -807,7 +918,7 @@ defmodule PpnetEncodeTest do
           datetime: ~U[2026-03-27 16:25:12Z]
         }
 
-        encoded = PPNet.encode_message(message)
+        {:ok, encoded} = PPNet.encode_message(message)
         assert is_binary(encoded), "expected a single frame, got: #{inspect(encoded)}"
 
         assert %{messages: [decoded], errors: []} = PPNet.parse(encoded)
@@ -846,7 +957,7 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 16:25:12Z]
       }
 
-      [encoded_header | encoded_chunks] = PPNet.encode_message(message)
+      {:ok, [encoded_header | encoded_chunks]} = PPNet.encode_message(message)
 
       assert %{messages: [decoded_header | decoded_chunks], errors: []} =
                [encoded_header | encoded_chunks]
@@ -873,7 +984,7 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 16:25:12Z]
       }
 
-      [encoded_header | encoded_chunks] = PPNet.encode_message(message)
+      {:ok, [encoded_header | encoded_chunks]} = PPNet.encode_message(message)
 
       assert %{messages: [decoded_header | decoded_chunks], errors: []} =
                [encoded_header | encoded_chunks]
@@ -908,7 +1019,9 @@ defmodule PpnetEncodeTest do
     test "encode/1 with valid data" do
       message = %ConfigAck{request_id: 1, status: :ok, datetime: ~U[2026-03-27 16:25:12Z]}
 
-      assert PPNet.encode_message(message) ==
+      assert {:ok, frame} = PPNet.encode_message(message)
+
+      assert frame ==
                <<0x02, 0x0A, 0x01, 0x01, 0x02, 0x01, 0x0D, 0x69, 0xC6, 0xAF, 0x68, 0x5E, 0x59, 0x38, 0x8F, 0x73, 0x15,
                  0xD5, 0x60, 0x00>>
     end
@@ -922,7 +1035,7 @@ defmodule PpnetEncodeTest do
           datetime: ~U[2026-03-27 16:25:12Z]
         }
 
-        encoded = PPNet.encode_message(message)
+        {:ok, encoded} = PPNet.encode_message(message)
         assert byte_size(encoded) == 20
 
         assert %{messages: [decoded], errors: []} = PPNet.parse(encoded)
@@ -950,7 +1063,9 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 16:25:12Z]
       }
 
-      assert PPNet.encode_message(message) ==
+      assert {:ok, frame} = PPNet.encode_message(message)
+
+      assert frame ==
                <<0x02, 0x08, 0x01, 0x01, 0x02, 0x2A, 0x01, 0x0D, 0x69, 0xC6, 0xAF, 0x68, 0x60, 0x0D, 0x7B, 0x91, 0x3D,
                  0x47, 0xC6, 0x71, 0x00>>
     end
@@ -964,7 +1079,9 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 16:25:12Z]
       }
 
-      assert PPNet.encode_message(message) ==
+      assert {:ok, frame} = PPNet.encode_message(message)
+
+      assert frame ==
                <<0x02, 0x08, 0x01, 0x01, 0x15, 0x2A, 0x01, 0x05, 0x03, 0x02, 0x7D, 0xE6, 0x06, 0x69, 0xC6, 0xAF, 0x68,
                  0x01, 0x8B, 0x6A, 0xD9, 0x71, 0x5C, 0xDC, 0x1A, 0x00>>
     end
@@ -986,7 +1103,7 @@ defmodule PpnetEncodeTest do
           datetime: ~U[2026-03-27 16:25:12Z]
         }
 
-        encoded = PPNet.encode_message(message)
+        {:ok, encoded} = PPNet.encode_message(message)
         assert is_binary(encoded), "expected a single frame, got: #{inspect(encoded)}"
 
         assert %{messages: [decoded], errors: []} = PPNet.parse(encoded)
@@ -1016,9 +1133,10 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 16:25:12Z]
       }
 
-      assert is_binary(ChunkedMessageAck.pack(message, 254))
+      assert {:ok, packed} = ChunkedMessageAck.pack(message, 254)
+      assert is_binary(packed)
 
-      frame = PPNet.encode_message(message)
+      {:ok, frame} = PPNet.encode_message(message)
       assert is_binary(frame)
       assert byte_size(frame) <= 254
       assert %{messages: [^message], errors: []} = PPNet.parse(frame)
@@ -1069,7 +1187,8 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 16:25:12Z]
       }
 
-      assert is_binary(ChunkedMessageAck.pack(message))
+      assert {:ok, packed} = ChunkedMessageAck.pack(message)
+      assert is_binary(packed)
 
       assert {:error, %PPNet.PackError{reason: :too_many_missing_chunks, data: %{size: 2, max_size: 1, limit: nil}}} =
                ChunkedMessageAck.pack(%{message | missing_chunks: [1, 2]})
@@ -1154,7 +1273,8 @@ defmodule PpnetEncodeTest do
         extra: %{}
       }
 
-      assert byte_size(PPNet.encode_message(message)) == 184
+      {:ok, frames} = PPNet.encode_message(message)
+      assert byte_size(frames) == 184
     end
 
     test "encode a Hello message" do
@@ -1168,7 +1288,8 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 16:25:12Z]
       }
 
-      assert byte_size(PPNet.encode_message(message)) == 93
+      {:ok, frames} = PPNet.encode_message(message)
+      assert byte_size(frames) == 93
     end
 
     test "encode a SingleCounter message" do
@@ -1180,7 +1301,8 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 16:25:12Z]
       }
 
-      assert byte_size(PPNet.encode_message(message)) == 47
+      {:ok, frames} = PPNet.encode_message(message)
+      assert byte_size(frames) == 47
     end
 
     test "encode an Event message" do
@@ -1214,7 +1336,7 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-27 18:46:39Z]
       }
 
-      encoded = PPNet.encode_message(message)
+      {:ok, encoded} = PPNet.encode_message(message)
       assert is_binary(encoded)
       assert byte_size(encoded) == 229
     end

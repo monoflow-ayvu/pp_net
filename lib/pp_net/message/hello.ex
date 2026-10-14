@@ -74,18 +74,19 @@ defmodule PPNet.Message.Hello do
         datetime: %DateTime{} = datetime
       })
       when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) do
-    Msgpax.pack!(
-      [
-        unique_id,
-        board_identifier,
-        version,
-        board_version,
-        boot_id,
-        ppnet_version(),
-        DateTime.to_unix(datetime)
-      ],
-      iodata: false
-    )
+    {:ok,
+     Msgpax.pack!(
+       [
+         unique_id,
+         board_identifier,
+         version,
+         board_version,
+         boot_id,
+         ppnet_version(),
+         DateTime.to_unix(datetime)
+       ],
+       iodata: false
+     )}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}

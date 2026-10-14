@@ -49,11 +49,12 @@ defmodule PPNet.Message.ConfigAck do
   @impl true
   def pack(%__MODULE__{request_id: request_id, status: status, datetime: %DateTime{} = datetime})
       when is_integer(request_id) and request_id >= 0 and status in @statuses do
-    <<
-      request_id::unsigned-integer-size(4)-unit(8),
-      @status_code[status]::unsigned-integer-size(1)-unit(8),
-      DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8)
-    >>
+    {:ok,
+     <<
+       request_id::unsigned-integer-size(4)-unit(8),
+       @status_code[status]::unsigned-integer-size(1)-unit(8),
+       DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8)
+     >>}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}

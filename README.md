@@ -190,9 +190,9 @@ Used when the payload is too large for a single frame (e.g. image). The body is 
 
 ## Usage
 
-- **Encode** a message: `PPNet.encode_message(message)` returns a single binary, or a list `[header_binary | chunk_binaries]` when the message is chunked (e.g. large image). You can pass `limit: n` to force chunking when the encoded size would exceed `n` bytes (default 254).
+- **Encode** a message: `PPNet.encode_message(message)` returns `{:ok, binary}`, or `{:ok, [header_binary | chunk_binaries]}` when the message is chunked (e.g. large image). A message that cannot be packed returns `{:error, %PPNet.PackError{}}`. You can pass `limit: n` to force chunking when the encoded size would exceed `n` bytes (default 254).
 
-- **Encode as a stream**: `PPNet.encode_message_stream(message)` yields the same frames as a lazy `Enumerable`, so large chunked messages can be sent frame-by-frame (e.g. into a chunked HTTP body) with O(chunk size) peak memory instead of materializing the full frame list. Useful on memory-constrained targets.
+- **Encode as a stream**: `PPNet.encode_message_stream(message)` returns `{:ok, frames}` with the same frames as a lazy `Enumerable`, so large chunked messages can be sent frame-by-frame (e.g. into a chunked HTTP body) with O(chunk size) peak memory instead of materializing the full frame list. Useful on memory-constrained targets.
 
 - **Parse** a stream: `PPNet.parse(binary)` returns `%{messages: [...], errors: [...]}`. Each element of `messages` is either a decoded message struct (Hello, Ping, etc.) or a `ChunkedMessageHeader` / `ChunkedMessageBody`. Join all frames (e.g. from a stream) and call `parse` on the concatenated binary.
 
@@ -202,7 +202,7 @@ Example (chunked image):
 
 ```elixir
 image = %PPNet.Message.Image{data: raw_binary, format: :webp, datetime: DateTime.utc_now()}
-[header_bin | chunk_bins] = PPNet.encode_message(image, limit: 200)
+{:ok, [header_bin | chunk_bins]} = PPNet.encode_message(image, limit: 200)
 payload = [header_bin | chunk_bins] |> Enum.join()
 %{messages: [header | body_messages], errors: []} = PPNet.parse(payload)
 {:ok, ^image} = PPNet.chunked_to_message([header | body_messages])

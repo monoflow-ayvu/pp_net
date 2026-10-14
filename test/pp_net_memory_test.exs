@@ -49,7 +49,7 @@ defmodule PPNetMemoryTest do
   test "encode_message/2 of a 1.6 MB image stays within an O(payload) heap budget" do
     message = large_image()
 
-    assert {:ok, frames} = run_with_heap_budget(@eager_heap_budget, fn -> PPNet.encode_message(message) end)
+    assert {:ok, {:ok, frames}} = run_with_heap_budget(@eager_heap_budget, fn -> PPNet.encode_message(message) end)
 
     assert length(frames) == @expected_chunks + 1
 
@@ -66,9 +66,9 @@ defmodule PPNetMemoryTest do
 
     assert {:ok, {frame_count, total_bytes}} =
              run_with_heap_budget(@stream_heap_budget, fn ->
-               message
-               |> PPNet.encode_message_stream()
-               |> Enum.reduce({0, 0}, fn frame, {count, bytes} -> {count + 1, bytes + byte_size(frame)} end)
+               {:ok, stream} = PPNet.encode_message_stream(message)
+
+               Enum.reduce(stream, {0, 0}, fn frame, {count, bytes} -> {count + 1, bytes + byte_size(frame)} end)
              end)
 
     assert frame_count == @expected_chunks + 1
@@ -77,7 +77,7 @@ defmodule PPNetMemoryTest do
 
   test "heap budget harness detects the 0.1.5 list-based chunking blow-up" do
     # proves the budget is tight enough to catch a regression to list chunking
-    packed = Image.pack(large_image())
+    {:ok, packed} = Image.pack(large_image())
 
     assert {:error, :heap_budget_exceeded} =
              run_with_heap_budget(@eager_heap_budget, fn ->

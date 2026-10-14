@@ -101,15 +101,16 @@ defmodule PPNet.Message.ConfigData do
 
     data_size = byte_size(compressed)
 
-    <<
-      @kind_codes[kind]::unsigned-integer-size(1)-unit(8),
-      request_id::unsigned-integer-size(4)-unit(8),
-      @data_format_codes[format]::unsigned-integer-size(1)-unit(8),
-      @compression_type_codes[compression]::unsigned-integer-size(1)-unit(8),
-      DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
-      data_size::unsigned-integer-size(3)-unit(8),
-      compressed::binary-size(data_size)-unit(8)
-    >>
+    {:ok,
+     <<
+       @kind_codes[kind]::unsigned-integer-size(1)-unit(8),
+       request_id::unsigned-integer-size(4)-unit(8),
+       @data_format_codes[format]::unsigned-integer-size(1)-unit(8),
+       @compression_type_codes[compression]::unsigned-integer-size(1)-unit(8),
+       DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
+       data_size::unsigned-integer-size(3)-unit(8),
+       compressed::binary-size(data_size)-unit(8)
+     >>}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}

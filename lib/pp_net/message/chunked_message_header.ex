@@ -45,6 +45,10 @@ defmodule PPNet.Message.ChunkedMessageHeader do
     field(:total_chunks, non_neg_integer(), enforce: true)
   end
 
+  @doc "The message modules whose messages can be split into chunks."
+  @spec chunkable_modules() :: [module()]
+  def chunkable_modules, do: @valid_message_modules
+
   @impl true
   def type_code, do: @type_code
 
@@ -59,12 +63,13 @@ defmodule PPNet.Message.ChunkedMessageHeader do
         total_chunks: total_chunks
       })
       when message_module in @valid_message_modules and is_integer(transaction_id) and is_integer(total_chunks) do
-    <<
-      message_module.type_code()::unsigned-integer-size(1)-unit(8),
-      transaction_id::unsigned-integer-size(4)-unit(8),
-      DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
-      total_chunks::unsigned-integer-size(2)-unit(8)
-    >>
+    {:ok,
+     <<
+       message_module.type_code()::unsigned-integer-size(1)-unit(8),
+       transaction_id::unsigned-integer-size(4)-unit(8),
+       DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
+       total_chunks::unsigned-integer-size(2)-unit(8)
+     >>}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
