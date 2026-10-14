@@ -34,6 +34,13 @@ defmodule PPNet.Message.Hello do
                   is_integer(boot_id) and boot_id >= 0 and
                   is_integer(datetime_unix) and datetime_unix > 0
 
+  # the old format (no datetime) only ever carried an integer ppnet_version
+  defguardp is_legacy_ppnet_version(ppnet_version) when is_integer(ppnet_version) and ppnet_version >= 0
+
+  # an integer on the wire up to v0.1.6, the library version string (e.g. "0.2.0") afterwards
+  defguardp is_valid_ppnet_version(ppnet_version)
+            when is_legacy_ppnet_version(ppnet_version) or is_binary(ppnet_version)
+
   typedstruct do
     @typedoc """
     The `PPNet.Message.Hello` struct
@@ -106,8 +113,8 @@ defmodule PPNet.Message.Hello do
   # Maintains compatibility with the old format (without datetime)
   # Since it doesn't have a datetime, it sets `now` as the default value.
   def parse([unique_id, board_identifier, version, board_version, boot_id, ppnet_version])
-      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) and is_integer(ppnet_version) and
-             ppnet_version >= 0 do
+      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) and
+             is_legacy_ppnet_version(ppnet_version) do
     {:ok,
      %Hello{
        unique_id: to_string(unique_id),
@@ -121,8 +128,8 @@ defmodule PPNet.Message.Hello do
   end
 
   def parse([unique_id, board_identifier, version, board_version, boot_id, ppnet_version, datetime])
-      when (is_valid_types_to_parse(unique_id, board_identifier, version, board_version, boot_id, datetime) and
-              (is_integer(ppnet_version) and ppnet_version >= 0)) or is_binary(ppnet_version) do
+      when is_valid_types_to_parse(unique_id, board_identifier, version, board_version, boot_id, datetime) and
+             is_valid_ppnet_version(ppnet_version) do
     {:ok,
      %Hello{
        unique_id: to_string(unique_id),
