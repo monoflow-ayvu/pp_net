@@ -129,15 +129,17 @@ defmodule PPNet.Message.ConfigData do
       ) do
     compression = @compression_type_codes_reverse[compression_code]
     format = @data_format_codes_reverse[format_code]
+    kind = @kind_codes_reverse[kind_code]
 
     decoded_payload =
       data
       |> decompress(compression)
       |> deserialize(format)
+      |> validate_format!(kind)
 
     {:ok,
      %__MODULE__{
-       kind: @kind_codes_reverse[kind_code],
+       kind: kind,
        format: format,
        compression: compression,
        request_id: request_id,
@@ -193,14 +195,14 @@ defmodule PPNet.Message.ConfigData do
   defp deserialize(data, :json), do: Jason.decode!(data)
   defp deserialize(data, :msgpack), do: Msgpax.unpack!(data)
 
-  def validate_format!(nil, :request_schema), do: nil
-  def validate_format!(nil, :request_full_config), do: nil
+  defp validate_format!(nil, :request_schema), do: nil
+  defp validate_format!(nil, :request_full_config), do: nil
 
-  def validate_format!(data, :set_config) do
+  defp validate_format!(data, :set_config) do
     JSV.validate!(data, @json_patch_schema)
   end
 
-  def validate_format!(data, kind) when is_map(data) and kind in [:full_report, :partial_report] do
+  defp validate_format!(data, kind) when is_map(data) and kind in [:full_report, :partial_report] do
     if not Map.has_key?(data, "version") or not Map.has_key?(data, "revision") do
       raise ArgumentError, "data must have version and revision fields"
     end
@@ -208,7 +210,7 @@ defmodule PPNet.Message.ConfigData do
     data
   end
 
-  def validate_format!(paths, :request_partial_config) when is_list(paths) do
+  defp validate_format!(paths, :request_partial_config) when is_list(paths) do
     if Enum.all?(paths, &(is_binary(&1) and String.match?(&1, ~r/^#?(|(\/([^\/~]|~[01])*)*)$/))) do
       paths
     else
@@ -218,7 +220,7 @@ defmodule PPNet.Message.ConfigData do
 
   # :schema — precisa ser um JSON Schema sintaticamente válido, e declarar
   # version/revision como exige o CONTRACT.md
-  def validate_format!(schema, :schema) when is_map(schema) do
+  defp validate_format!(schema, :schema) when is_map(schema) do
     JSV.build!(schema)
 
     required = schema["required"] || []
@@ -239,7 +241,7 @@ defmodule PPNet.Message.ConfigData do
     end
   end
 
-  def validate_format!(_data, kind) do
+  defp validate_format!(_data, kind) do
     raise ArgumentError, "invalid data format for #{inspect(kind)}"
   end
 end
