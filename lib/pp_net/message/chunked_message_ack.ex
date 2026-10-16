@@ -60,6 +60,8 @@ defmodule PPNet.Message.ChunkedMessageAck do
     missing_chunks_binary =
       missing_chunks
       |> Enum.sort()
+      |> Enum.uniq()
+      |> validate_chunk_indexes!()
       |> gen_delta()
       |> encode_varints()
 
@@ -120,6 +122,14 @@ defmodule PPNet.Message.ChunkedMessageAck do
        reason: :unknown_format,
        data: %{payload: data}
      }}
+  end
+
+  defp validate_chunk_indexes!(chunk_indexes) do
+    if Enum.all?(chunk_indexes, &(is_integer(&1) and &1 >= 0)) do
+      chunk_indexes
+    else
+      raise ArgumentError, "missing_chunks must contain only non-negative integers, got: #{inspect(chunk_indexes)}"
+    end
   end
 
   defp gen_delta([]), do: []

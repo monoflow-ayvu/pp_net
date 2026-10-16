@@ -1194,6 +1194,24 @@ defmodule PpnetEncodeTest do
                ChunkedMessageAck.pack(%{message | missing_chunks: [1, 2]})
     end
 
+    test "pack/2 rejects missing_chunks that are not non-negative integers" do
+      message = %ChunkedMessageAck{
+        transaction_id: 42,
+        status: :incomplete,
+        missing_chunks: [],
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      for invalid <- [[-1, 2], [1, :a], [1.5], [nil]] do
+        expected = "missing_chunks must contain only non-negative integers, got: #{inspect(Enum.sort(invalid))}"
+
+        assert {:error, %PPNet.PackError{reason: {%ArgumentError{message: ^expected}, _stacktrace}}} =
+                 ChunkedMessageAck.pack(%{message | missing_chunks: invalid}, 254)
+      end
+
+      assert {:ok, _packed} = ChunkedMessageAck.pack(%{message | missing_chunks: [0, 2, 5]}, 254)
+    end
+
     test "pack/1 with invalid struct returns error" do
       # negative transaction_id violates guard
       assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
