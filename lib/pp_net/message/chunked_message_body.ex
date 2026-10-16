@@ -58,13 +58,14 @@ defmodule PPNet.Message.ChunkedMessageBody do
       })
       when is_transaction_id_valid(transaction_id) and is_chunk_index_valid(chunk_index) and is_integer(chunk_size) and
              chunk_size <= 254 and is_binary(chunk_data) do
-    <<
-      transaction_id::unsigned-integer-size(4)-unit(8),
-      DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
-      chunk_index::unsigned-integer-size(2)-unit(8),
-      chunk_size::unsigned-integer-size(1)-unit(8),
-      chunk_data::binary-size(chunk_size)-unit(8)
-    >>
+    {:ok,
+     <<
+       transaction_id::unsigned-integer-size(4)-unit(8),
+       DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
+       chunk_index::unsigned-integer-size(2)-unit(8),
+       chunk_size::unsigned-integer-size(1)-unit(8),
+       chunk_data::binary-size(chunk_size)-unit(8)
+     >>}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}

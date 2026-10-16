@@ -58,6 +58,56 @@ defmodule BackwardCompatibilityTest do
     end
   end
 
+  describe "decode PPNet.Message.Hello (from v0.1.6)" do
+    test "parse/1 with valid binary data" do
+      # captured from PPNet.encode_message/2 at the v0.1.6 tag
+      # ppnet_version is still an integer
+      payload =
+        <<0x2E, 0x01, 0x97, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
+          0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0xCE, 0x69, 0xC5,
+          0x9E, 0x87, 0x25, 0xD8, 0xC2, 0x4C, 0x7E, 0x8B, 0x0F, 0x96, 0x00>>
+
+      assert %{
+               messages: [
+                 %Hello{
+                   ppnet_version: 1,
+                   boot_id: 87_372_886,
+                   board_version: 17_185,
+                   version: 4660,
+                   board_identifier: "Tester",
+                   unique_id: "TestRunner",
+                   datetime: ~U[2026-03-26 21:00:55Z]
+                 }
+               ],
+               errors: []
+             } = PPNet.parse(payload)
+    end
+
+    test "parse/1 with valid binary data when payload is a list" do
+      payload =
+        :binary.bin_to_list(
+          <<0x2E, 0x01, 0x97, 0xAA, 0x54, 0x65, 0x73, 0x74, 0x52, 0x75, 0x6E, 0x6E, 0x65, 0x72, 0xA6, 0x54, 0x65, 0x73,
+            0x74, 0x65, 0x72, 0xCD, 0x12, 0x34, 0xCD, 0x43, 0x21, 0xCE, 0x05, 0x35, 0x34, 0x56, 0x01, 0xCE, 0x69, 0xC5,
+            0x9E, 0x87, 0x25, 0xD8, 0xC2, 0x4C, 0x7E, 0x8B, 0x0F, 0x96, 0x00>>
+        )
+
+      assert %{
+               messages: [
+                 %Hello{
+                   ppnet_version: 1,
+                   boot_id: 87_372_886,
+                   board_version: 17_185,
+                   version: 4660,
+                   board_identifier: "Tester",
+                   unique_id: "TestRunner",
+                   datetime: ~U[2026-03-26 21:00:55Z]
+                 }
+               ],
+               errors: []
+             } = PPNet.parse(payload)
+    end
+  end
+
   describe "decode PPNet.Message.Ping (from v0.1.1)" do
     test "parse/1 with valid binary data" do
       payload =

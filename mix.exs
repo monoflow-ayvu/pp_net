@@ -1,4 +1,4 @@
-defmodule PpNet.MixProject do
+defmodule PPNet.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/monoflow-ayvu/pp_net"
@@ -39,6 +39,9 @@ defmodule PpNet.MixProject do
       {:cobs, "~> 0.2.0"},
       {:reed_solomon_ex, "~> 0.2.0"},
       {:elixir_uuid, "~> 1.2"},
+      {:brotli, "~> 0.3.3"},
+      {:jsv, "~> 0.24.0"},
+      {:nimble_options, "~> 1.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:quokka, "~> 2.11", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

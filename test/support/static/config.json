@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": 1,
+  "revision": 1,
+  "exported_at": "2026-03-27T16:25:12Z",
+  "settings": {
+    "device_name": "Test Board",
+    "tz_offset_minutes": 0,
+    "ntp_servers": ["pool.ntp.org"],
+    "retention_defaults": {
+      "max_days": 30,
+      "max_bytes_fraction": 0.8,
+      "max_events_per_camera": 1000
+    },
+    "recording_limits": {
+      "max_segment_s": 60
+    },
+    "nvr_merge_bitrate_kbps": 2048,
+    "nvr_pause_stable_s": 10,
+    "nerveshub_channel": "prod",
+    "network": {
+      "wifi": [
+        {"ssid": "test-network", "psk": "supersecret"}
+      ]
+    },
+    "cloud_sync": {
+      "enabled": true,
+      "url": "https://cloud.example.com",
+      "send_images": false,
+      "batch_size": 50,
+      "sync_interval_ms": 60000
+    },
+    "boot_count": 3
+  },
+  "cameras": [
+    {
+      "id": 1,
+      "name": "Front Door",
+      "source_type": "simulated",
+      "source_config_json": {"loop": true, "pace": true},
+      "enabled": true,
+      "position": 0,
+      "recording_enabled": true,
+      "recording_segment_s": 60
+    },
+    {
+      "id": 2,
+      "name": "Back Yard",
+      "source_type": "rtsp",
+      "source_config_json": {
+        "main_url": "rtsp://192.168.1.10/stream1",
+        "sub_url": "rtsp://192.168.1.10/stream2",
+        "transport": "tcp",
+        "username": "admin",
+        "password": "REDACTED"
+      },
+      "enabled": true,
+      "position": 1,
+      "recording_enabled": true,
+      "recording_segment_s": 120,
+      "rotation": 180
+    },
+    {
+      "id": 3,
+      "name": "Warehouse USB",
+      "source_type": "usb",
+      "source_config_json": {
+        "device": "/dev/video0",
+        "width": 1920,
+        "height": 1080,
+        "fps": 15,
+        "input_format": "YUYV"
+      },
+      "enabled": true,
+      "position": 2,
+      "recording_enabled": false,
+      "recording_segment_s": 60
+    },
+    {
+      "id": 4,
+      "name": "Loading Dock",
+      "source_type": "hls",
+      "source_config_json": {
+        "main_url": "https://cdn.example.com/dock/index.m3u8",
+        "pace": true,
+        "fps": 24.0
+      },
+      "enabled": false,
+      "position": 3,
+      "recording_enabled": false,
+      "recording_segment_s": 60
+    }
+  ],
+  "functionality_instances": [
+    {
+      "camera_id": 1,
+      "functionality_id": "face-recognition",
+      "enabled": true
+    },
+    {
+      "camera_id": 2,
+      "functionality_id": "people-distance",
+      "enabled": true,
+      "config_json": {
+        "warning_distance_m": 1.5,
+        "critical_distance_m": 0.8,
+        "pose_model": "yolo11s_pose_832x480",
+        "pose_fps": 5.0,
+        "camera_kind": "rectilinear",
+        "camera_fov_degrees": 90
+      }
+    },
+    {
+      "camera_id": 3,
+      "functionality_id": "depth-test",
+      "enabled": false,
+      "config_json": {
+        "model": "midas_v21_small_256",
+        "opacity": 50,
+        "fps": 2.0
+      }
+    }
+  ],
+  "models": [
+    {"name": "yolo11s", "version": "1.0", "ep_preference": "cpu"},
+    {"name": "midas_v21_small_256", "version": "2.1", "ep_preference": "qnn"}
+  ]
+}

@@ -49,16 +49,17 @@ defmodule PPNet.Message.SingleCounter do
         datetime: %DateTime{} = datetime
       })
       when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) do
-    Msgpax.pack!(
-      [
-        kind,
-        value,
-        pulses,
-        duration_ms,
-        DateTime.to_unix(datetime)
-      ],
-      iodata: false
-    )
+    {:ok,
+     Msgpax.pack!(
+       [
+         kind,
+         value,
+         pulses,
+         duration_ms,
+         DateTime.to_unix(datetime)
+       ],
+       iodata: false
+     )}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
