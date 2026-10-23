@@ -149,8 +149,51 @@ defmodule PpnetEncodeTest do
       assert {:ok, frame} = PPNet.encode_message(message)
 
       assert frame ==
-               <<0x08, 0x02, 0x95, 0xA3, 0x62, 0x61, 0x72, 0x2A, 0x11, 0xCD, 0x05, 0xDC, 0xCE, 0x69, 0xC6, 0x7E, 0xDE,
-                 0x34, 0x40, 0x8D, 0x2C, 0x55, 0xEE, 0xF9, 0x2D, 0x00>>
+               <<8, 2, 150, 163, 98, 97, 114, 42, 9, 205, 5, 220, 206, 105, 198, 126, 222, 9, 105, 151, 89, 8, 209, 243,
+                 113, 69, 0>>
+    end
+
+    test "encode_message/2 and parse/1 keep the hop" do
+      for hop <- [0, 1, 255] do
+        message = %SingleCounter{
+          duration_ms: 1500,
+          kind: "bar",
+          pulses: 0,
+          value: 42,
+          datetime: ~U[2026-03-27 12:58:06Z],
+          hop: hop
+        }
+
+        assert {:ok, frames} = PPNet.encode_message(message)
+        assert %{messages: [^message], errors: []} = PPNet.parse(frames)
+      end
+    end
+
+    test "parse/1 returns hop 0 when the struct was built without hop" do
+      message = %SingleCounter{
+        duration_ms: 1500,
+        kind: "bar",
+        pulses: 0,
+        value: 42,
+        datetime: ~U[2026-03-27 12:58:06Z]
+      }
+
+      assert {:ok, frames} = PPNet.encode_message(message)
+      assert %{messages: [%SingleCounter{hop: 0}], errors: []} = PPNet.parse(frames)
+    end
+
+    test "pack/1 refuses an invalid hop" do
+      for hop <- [256, -1, "1", nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_hop}} =
+                 SingleCounter.pack(%SingleCounter{
+                   kind: "bar",
+                   value: 42,
+                   pulses: 0,
+                   duration_ms: 1500,
+                   datetime: ~U[2026-03-27 12:58:06Z],
+                   hop: hop
+                 })
+      end
     end
 
     test "pack/1 with invalid struct returns error" do
@@ -175,7 +218,8 @@ defmodule PpnetEncodeTest do
     end
 
     test "encode_message/2 with limit below minimum clamps to 22" do
-      message = %SingleCounter{kind: "a", value: 0, pulses: 0, duration_ms: 0, datetime: DateTime.utc_now()}
+      # a SingleCounter frame no longer fits in 22 bytes with the hop, so use a smaller message
+      message = %Event{kind: :detection, data: %{}, datetime: DateTime.utc_now()}
       assert PPNet.encode_message(message, limit: 5) == PPNet.encode_message(message, limit: 22)
     end
   end
@@ -328,9 +372,45 @@ defmodule PpnetEncodeTest do
                })
 
       assert frame ==
-               <<0x24, 0x04, 0x93, 0x01, 0x82, 0xA9, 0x73, 0x65, 0x6E, 0x73, 0x6F, 0x72, 0x5F, 0x69, 0x64, 0x01, 0xA5,
-                 0x76, 0x61, 0x6C, 0x75, 0x65, 0x64, 0xCE, 0x69, 0xC6, 0xD0, 0x8F, 0x89, 0x5B, 0x7B, 0xB2, 0xB9, 0x23,
-                 0xC1, 0x2C, 0x00>>
+               <<28, 4, 148, 1, 130, 169, 115, 101, 110, 115, 111, 114, 95, 105, 100, 1, 165, 118, 97, 108, 117, 101,
+                 100, 206, 105, 198, 208, 143, 9, 13, 241, 43, 187, 221, 2, 154, 66, 0>>
+    end
+
+    test "encode_message/2 and parse/1 keep the hop" do
+      for hop <- [0, 1, 255] do
+        message = %Event{
+          kind: :detection,
+          data: %{"sensor_id" => 1, "value" => 100},
+          datetime: ~U[2026-03-27 18:46:39Z],
+          hop: hop
+        }
+
+        assert {:ok, frames} = PPNet.encode_message(message)
+        assert %{messages: [^message], errors: []} = PPNet.parse(frames)
+      end
+    end
+
+    test "parse/1 returns hop 0 when the struct was built without hop" do
+      message = %Event{
+        kind: :detection,
+        data: %{"sensor_id" => 1, "value" => 100},
+        datetime: ~U[2026-03-27 18:46:39Z]
+      }
+
+      assert {:ok, frames} = PPNet.encode_message(message)
+      assert %{messages: [%Event{hop: 0}], errors: []} = PPNet.parse(frames)
+    end
+
+    test "pack/1 refuses an invalid hop" do
+      for hop <- [256, -1, "1", nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_hop}} =
+                 Event.pack(%Event{
+                   kind: :detection,
+                   data: %{"sensor_id" => 1},
+                   datetime: ~U[2026-03-27 18:46:39Z],
+                   hop: hop
+                 })
+      end
     end
 
     test "encode/1 encode sensor alert map data" do
@@ -369,20 +449,16 @@ defmodule PpnetEncodeTest do
       assert {:ok, frame} = PPNet.encode_message(event)
 
       assert frame ==
-               <<0x0F, 0x04, 0x93, 0x01, 0x82, 0xA8, 0x69, 0x6D, 0x61, 0x67, 0x65, 0x5F, 0x69, 0x64, 0xDC, 0x2B, 0x10,
-                 0xCC, 0x99, 0x7A, 0x60, 0x60, 0xCC, 0xD3, 0xCC, 0x84, 0x4A, 0x35, 0xCC, 0x85, 0x07, 0x3E, 0xCC, 0xEA,
-                 0xCC, 0xD1, 0xCC, 0xAE, 0xCC, 0xD5, 0x1E, 0xA1, 0x64, 0x93, 0x83, 0xA1, 0x73, 0xCB, 0x3F, 0xE1, 0x40,
-                 0x78, 0x96, 0x13, 0xD3, 0x1C, 0xA1, 0x63, 0x0E, 0xA4, 0x62, 0x62, 0x6F, 0x78, 0x94, 0xCB, 0x40, 0x75,
-                 0x3F, 0x34, 0x0B, 0x48, 0x01, 0x08, 0xCB, 0x40, 0x63, 0x04, 0x43, 0x4A, 0x70, 0x01, 0x08, 0xCB, 0x40,
-                 0x55, 0x80, 0x63, 0xC1, 0xC0, 0x01, 0x08, 0xCB, 0x40, 0x55, 0x76, 0xDE, 0x52, 0x40, 0x01, 0x0F, 0x83,
-                 0xA1, 0x73, 0xCB, 0x3F, 0xE1, 0x40, 0x78, 0x96, 0x13, 0xD3, 0x1C, 0xA1, 0x63, 0x0E, 0xA4, 0x62, 0x62,
-                 0x6F, 0x78, 0x94, 0xCB, 0x40, 0x75, 0x3F, 0x34, 0x0B, 0x48, 0x01, 0x08, 0xCB, 0x40, 0x63, 0x04, 0x43,
-                 0x4A, 0x70, 0x01, 0x08, 0xCB, 0x40, 0x55, 0x80, 0x63, 0xC1, 0xC0, 0x01, 0x08, 0xCB, 0x40, 0x55, 0x76,
-                 0xDE, 0x52, 0x40, 0x01, 0x0F, 0x83, 0xA1, 0x73, 0xCB, 0x3F, 0xE1, 0x40, 0x78, 0x96, 0x13, 0xD3, 0x1C,
-                 0xA1, 0x63, 0x0E, 0xA4, 0x62, 0x62, 0x6F, 0x78, 0x94, 0xCB, 0x40, 0x75, 0x3F, 0x34, 0x0B, 0x48, 0x01,
-                 0x08, 0xCB, 0x40, 0x63, 0x04, 0x43, 0x4A, 0x70, 0x01, 0x08, 0xCB, 0x40, 0x55, 0x80, 0x63, 0xC1, 0xC0,
-                 0x01, 0x08, 0xCB, 0x40, 0x55, 0x76, 0xDE, 0x52, 0x40, 0x01, 0x0E, 0xCE, 0x69, 0xC6, 0xD0, 0x8F, 0xB9,
-                 0x92, 0x72, 0xAE, 0x75, 0x64, 0x58, 0x12, 0x00>>
+               <<15, 4, 148, 1, 130, 168, 105, 109, 97, 103, 101, 95, 105, 100, 220, 43, 16, 204, 153, 122, 96, 96, 204,
+                 211, 204, 132, 74, 53, 204, 133, 7, 62, 204, 234, 204, 209, 204, 174, 204, 213, 30, 161, 100, 147, 131,
+                 161, 115, 203, 63, 225, 64, 120, 150, 19, 211, 28, 161, 99, 14, 164, 98, 98, 111, 120, 148, 203, 64,
+                 117, 63, 52, 11, 72, 1, 8, 203, 64, 99, 4, 67, 74, 112, 1, 8, 203, 64, 85, 128, 99, 193, 192, 1, 8,
+                 203, 64, 85, 118, 222, 82, 64, 1, 15, 131, 161, 115, 203, 63, 225, 64, 120, 150, 19, 211, 28, 161, 99,
+                 14, 164, 98, 98, 111, 120, 148, 203, 64, 117, 63, 52, 11, 72, 1, 8, 203, 64, 99, 4, 67, 74, 112, 1, 8,
+                 203, 64, 85, 128, 99, 193, 192, 1, 8, 203, 64, 85, 118, 222, 82, 64, 1, 15, 131, 161, 115, 203, 63,
+                 225, 64, 120, 150, 19, 211, 28, 161, 99, 14, 164, 98, 98, 111, 120, 148, 203, 64, 117, 63, 52, 11, 72,
+                 1, 8, 203, 64, 99, 4, 67, 74, 112, 1, 8, 203, 64, 85, 128, 99, 193, 192, 1, 8, 203, 64, 85, 118, 222,
+                 82, 64, 1, 6, 206, 105, 198, 208, 143, 9, 11, 147, 2, 39, 198, 67, 193, 82, 0>>
     end
 
     test "message too large is split into chunks" do
@@ -556,6 +632,62 @@ defmodule PpnetEncodeTest do
 
       assert {:ok, %Image{data: ^image, format: :webp}} =
                PPNet.chunked_to_message([header | chunks])
+    end
+
+    test "encode_message/2 and parse/1 keep the hop" do
+      for hop <- [0, 1, 255] do
+        message = %Image{
+          id: UUID.uuid4(),
+          format: :jpeg,
+          data: <<1, 2, 3, 4>>,
+          datetime: ~U[2026-03-27 20:15:41Z],
+          hop: hop
+        }
+
+        assert {:ok, frames} = PPNet.encode_message(message)
+        assert %{messages: [^message], errors: []} = PPNet.parse(frames)
+      end
+    end
+
+    test "parse/1 returns hop 0 when the struct was built without hop" do
+      message = %Image{id: UUID.uuid4(), format: :jpeg, data: <<1, 2, 3, 4>>, datetime: ~U[2026-03-27 20:15:41Z]}
+
+      assert {:ok, frames} = PPNet.encode_message(message)
+      assert %{messages: [%Image{hop: 0}], errors: []} = PPNet.parse(frames)
+    end
+
+    test "pack/1 refuses an invalid hop" do
+      annex_b_data = <<0, 0, 1>> <> "frame"
+
+      for hop <- [256, -1, "1", nil], {format, data} <- [{:jpeg, <<1, 2, 3, 4>>}, {:h264, annex_b_data}] do
+        assert {:error, %PPNet.PackError{reason: :invalid_hop}} =
+                 Image.pack(%Image{
+                   id: UUID.uuid4(),
+                   format: format,
+                   data: data,
+                   datetime: ~U[2026-03-27 20:15:41Z],
+                   hop: hop
+                 })
+      end
+    end
+
+    test "a chunked image keeps the hop" do
+      message = %Image{
+        id: UUID.uuid4(),
+        format: :webp,
+        data: File.read!("test/support/static/image.webp"),
+        datetime: ~U[2026-03-27 20:15:41Z],
+        hop: 3
+      }
+
+      assert {:ok, frames} = PPNet.encode_message(message, force_chunked: true)
+
+      assert %{messages: [decoded_header | decoded_chunks], errors: []} =
+               frames
+               |> Enum.join()
+               |> PPNet.parse()
+
+      assert PPNet.chunked_to_message([decoded_header | decoded_chunks]) == {:ok, message}
     end
 
     test "pack/1 with invalid struct returns error" do
@@ -811,7 +943,10 @@ defmodule PpnetEncodeTest do
 
     test "an out-of-range limit is clamped instead of rejected", %{message: message} do
       assert PPNet.encode_message(message, limit: 9999) == PPNet.encode_message(message, limit: 254)
-      assert PPNet.encode_message(message, limit: 0) == PPNet.encode_message(message, limit: 22)
+
+      # a SingleCounter frame no longer fits in 22 bytes with the hop, so use a smaller message
+      small_message = %Event{kind: :detection, data: %{}, datetime: message.datetime}
+      assert PPNet.encode_message(small_message, limit: 0) == PPNet.encode_message(small_message, limit: 22)
     end
   end
 
@@ -923,6 +1058,53 @@ defmodule PpnetEncodeTest do
 
         assert %{messages: [decoded], errors: []} = PPNet.parse(encoded)
         assert decoded == message
+      end
+    end
+
+    for kind <- [:full_report, :set_config], hop <- [0, 1, 255] do
+      @tag kind: kind, hop: hop
+      test "#{kind} keeps the hop #{hop}", %{kind: kind, hop: hop} do
+        message = %ConfigData{
+          kind: kind,
+          request_id: System.unique_integer([:positive]),
+          format: :json,
+          compression: :none,
+          request_payload: @config_data_by_kind[kind],
+          datetime: ~U[2026-03-27 16:25:12Z],
+          hop: hop
+        }
+
+        assert {:ok, encoded} = PPNet.encode_message(message)
+        assert %{messages: [^message], errors: []} = PPNet.parse(encoded)
+      end
+    end
+
+    test "parse/1 returns hop 0 when the struct was built without hop" do
+      message = %ConfigData{
+        kind: :full_report,
+        request_id: 1,
+        format: :json,
+        compression: :none,
+        request_payload: @config_data_by_kind[:full_report],
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert {:ok, encoded} = PPNet.encode_message(message)
+      assert %{messages: [%ConfigData{hop: 0}], errors: []} = PPNet.parse(encoded)
+    end
+
+    test "pack/1 refuses an invalid hop" do
+      for hop <- [256, -1, "1", nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_hop}} =
+                 ConfigData.pack(%ConfigData{
+                   kind: :full_report,
+                   request_id: 1,
+                   format: :json,
+                   compression: :none,
+                   request_payload: @config_data_by_kind[:full_report],
+                   datetime: ~U[2026-03-27 16:25:12Z],
+                   hop: hop
+                 })
       end
     end
 
@@ -1320,7 +1502,7 @@ defmodule PpnetEncodeTest do
       }
 
       {:ok, frames} = PPNet.encode_message(message)
-      assert byte_size(frames) == 47
+      assert byte_size(frames) == 48
     end
 
     test "encode an Event message" do
@@ -1356,7 +1538,7 @@ defmodule PpnetEncodeTest do
 
       {:ok, encoded} = PPNet.encode_message(message)
       assert is_binary(encoded)
-      assert byte_size(encoded) == 229
+      assert byte_size(encoded) == 230
     end
   end
 end

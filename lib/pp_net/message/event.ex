@@ -27,12 +27,17 @@ defmodule PPNet.Message.Event do
     * `kind` - The kind of event (`:detection`)
     * `data` - Arbitrary key/value payload associated with the event
     * `datetime` - Timestamp of the event
+    * `hop` - Unsigned 8-bit integer (0–255): the address of the device on the board's internal bus
+      that generated the event; 0 (the default) is the board itself
     """
 
     field(:kind, event_kind(), enforce: true)
     field(:data, %{optional(String.t()) => any()}, enforce: true)
     field(:datetime, DateTime.t(), enforce: true)
+    field(:hop, 0..255, default: 0)
   end
+
+  defguardp is_hop(hop) when is_integer(hop) and hop >= 0 and hop <= 255
 
   @impl true
   def type_code, do: @type_code
@@ -41,13 +46,15 @@ defmodule PPNet.Message.Event do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
-  def pack(%__MODULE__{kind: kind, data: data, datetime: %DateTime{} = datetime})
+  def pack(%__MODULE__{hop: hop}) when not is_hop(hop), do: PackError.invalid_hop()
+
+  def pack(%__MODULE__{kind: kind, data: data, datetime: %DateTime{} = datetime, hop: hop})
       when kind in @valid_event_kinds and is_map(data) do
     verify_data!(data)
 
     {:ok,
      Msgpax.pack!(
-       [@event_kind_to_code[kind], data, DateTime.to_unix(datetime)],
+       [@event_kind_to_code[kind], data, DateTime.to_unix(datetime), hop],
        iodata: false
      )}
   rescue
@@ -66,13 +73,30 @@ defmodule PPNet.Message.Event do
     end
   end
 
+  def parse([kind_code, data, datetime, hop])
+      when kind_code in @valid_event_kind_codes and is_map(data) and is_integer(datetime) and is_hop(hop) do
+    {:ok,
+     %__MODULE__{
+       kind: @code_to_event_kind[kind_code],
+       data: data,
+       datetime: DateTime.from_unix!(datetime),
+       hop: hop
+     }}
+  end
+
   def parse([kind_code, data, datetime])
       when kind_code in @valid_event_kind_codes and is_map(data) and is_integer(datetime) do
-    {:ok, %__MODULE__{kind: @code_to_event_kind[kind_code], data: data, datetime: DateTime.from_unix!(datetime)}}
+    {:ok,
+     %__MODULE__{
+       kind: @code_to_event_kind[kind_code],
+       data: data,
+       datetime: DateTime.from_unix!(datetime),
+       hop: 0
+     }}
   end
 
   def parse([kind_code, data]) when kind_code in @valid_event_kind_codes and is_map(data) do
-    {:ok, %__MODULE__{kind: @code_to_event_kind[kind_code], data: data, datetime: nil}}
+    {:ok, %__MODULE__{kind: @code_to_event_kind[kind_code], data: data, datetime: nil, hop: 0}}
   end
 
   def parse(unpacked_body) when is_list(unpacked_body) do

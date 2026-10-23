@@ -191,7 +191,8 @@ defmodule BackwardCompatibilityTest do
                    pulses: 0,
                    value: 42,
                    kind: "bar",
-                   datetime: nil
+                   datetime: nil,
+                   hop: 0
                  }
                ],
                errors: []
@@ -214,11 +215,34 @@ defmodule BackwardCompatibilityTest do
                      pulses: 0,
                      value: 42,
                      kind: "bar",
-                     datetime: nil
+                     datetime: nil,
+                     hop: 0
                    }
                  ],
                  errors: []
                }
+    end
+  end
+
+  describe "decode PPNet.Message.SingleCounter (from v0.1.6)" do
+    test "parse/1 with valid binary data" do
+      payload =
+        <<8, 2, 149, 163, 98, 97, 114, 42, 17, 205, 5, 220, 206, 106, 70, 82, 192, 239, 130, 212, 64, 250, 158, 201, 95,
+          0>>
+
+      assert %{
+               messages: [
+                 %SingleCounter{
+                   kind: "bar",
+                   value: 42,
+                   pulses: 0,
+                   duration_ms: 1500,
+                   datetime: ~U[2026-07-02 12:00:00Z],
+                   hop: 0
+                 }
+               ],
+               errors: []
+             } = PPNet.parse(payload)
     end
   end
 
@@ -309,7 +333,28 @@ defmodule BackwardCompatibilityTest do
                  %Event{
                    kind: :detection,
                    data: %{"sensor_id" => 1, "value" => 100},
-                   datetime: nil
+                   datetime: nil,
+                   hop: 0
+                 }
+               ],
+               errors: []
+             } = PPNet.parse(payload)
+    end
+  end
+
+  describe "decode PPNet.Message.Event (from v0.1.6)" do
+    test "parse/1 with valid binary data" do
+      payload =
+        <<36, 4, 147, 1, 130, 165, 118, 97, 108, 117, 101, 100, 169, 115, 101, 110, 115, 111, 114, 95, 105, 100, 1, 206,
+          106, 70, 82, 192, 18, 124, 120, 48, 208, 149, 26, 91, 0>>
+
+      assert %{
+               messages: [
+                 %Event{
+                   kind: :detection,
+                   data: %{"sensor_id" => 1, "value" => 100},
+                   datetime: ~U[2026-07-02 12:00:00Z],
+                   hop: 0
                  }
                ],
                errors: []
@@ -332,8 +377,26 @@ defmodule BackwardCompatibilityTest do
        %Image{
          datetime: nil,
          data: ^image,
-         format: :webp
+         format: :webp,
+         hop: 0
        }} = Image.parse(image_bin_v013)
+    end
+  end
+
+  describe "decode image (from v0.1.6)" do
+    test "parse/1 with valid binary data" do
+      body =
+        <<153, 122, 96, 96, 211, 132, 74, 53, 133, 7, 62, 234, 209, 174, 213, 30, 1, 106, 70, 82, 192, 0, 0, 0, 4, 1, 2,
+          3, 4>>
+
+      assert {:ok,
+              %Image{
+                id: "997a6060-d384-4a35-8507-3eead1aed51e",
+                format: :jpeg,
+                data: <<1, 2, 3, 4>>,
+                datetime: ~U[2026-07-02 12:00:00Z],
+                hop: 0
+              }} = Image.parse(body)
     end
   end
 

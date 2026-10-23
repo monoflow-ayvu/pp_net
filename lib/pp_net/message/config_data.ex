@@ -67,6 +67,10 @@ defmodule PPNet.Message.ConfigData do
     * `request_payload` - The payload as a plain Elixir term (map, list, or `nil`) — shape
       depends on `kind`, see `CONTRACT.md`.
     * `datetime` - Date and time of the transmission.
+    * `hop` - Unsigned 8-bit integer (0–255): the address of a device on the board's internal bus;
+      0 (the default) is the board itself. It is the origin for the board → server kinds
+      (`:schema`, `:full_report`, `:partial_report`) and the destination for the server → board
+      kinds (`:request_schema`, `:request_full_config`, `:request_partial_config`, `:set_config`).
     """
     field(:kind, atom(), enforce: true)
     field(:request_id, non_neg_integer(), enforce: true)
@@ -74,7 +78,10 @@ defmodule PPNet.Message.ConfigData do
     field(:compression, atom(), enforce: true)
     field(:request_payload, map() | list() | nil, enforce: true)
     field(:datetime, DateTime.t(), enforce: true)
+    field(:hop, 0..255, default: 0)
   end
+
+  defguardp is_hop(hop) when is_integer(hop) and hop >= 0 and hop <= 255
 
   @impl true
   def type_code, do: @type_code
@@ -83,13 +90,16 @@ defmodule PPNet.Message.ConfigData do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(%__MODULE__{hop: hop}) when not is_hop(hop), do: PackError.invalid_hop()
+
   def pack(%__MODULE__{
         kind: kind,
         request_id: request_id,
         format: format,
         compression: compression,
         request_payload: request_payload,
-        datetime: %DateTime{} = datetime
+        datetime: %DateTime{} = datetime,
+        hop: hop
       })
       when kind in @kinds and is_integer(request_id) and request_id >= 0 and format in @data_formats and
              compression in @compression_types do
@@ -104,6 +114,7 @@ defmodule PPNet.Message.ConfigData do
     {:ok,
      <<
        @kind_codes[kind]::unsigned-integer-size(1)-unit(8),
+       hop::unsigned-integer-size(1)-unit(8),
        request_id::unsigned-integer-size(4)-unit(8),
        @data_format_codes[format]::unsigned-integer-size(1)-unit(8),
        @compression_type_codes[compression]::unsigned-integer-size(1)-unit(8),
@@ -122,10 +133,10 @@ defmodule PPNet.Message.ConfigData do
 
   @impl true
   def parse(
-        <<kind_code::unsigned-integer-size(1)-unit(8), request_id::unsigned-integer-size(4)-unit(8),
-          format_code::unsigned-integer-size(1)-unit(8), compression_code::unsigned-integer-size(1)-unit(8),
-          datetime::unsigned-integer-size(4)-unit(8), data_size::unsigned-integer-size(3)-unit(8),
-          data::binary-size(data_size)-unit(8)>>
+        <<kind_code::unsigned-integer-size(1)-unit(8), hop::unsigned-integer-size(1)-unit(8),
+          request_id::unsigned-integer-size(4)-unit(8), format_code::unsigned-integer-size(1)-unit(8),
+          compression_code::unsigned-integer-size(1)-unit(8), datetime::unsigned-integer-size(4)-unit(8),
+          data_size::unsigned-integer-size(3)-unit(8), data::binary-size(data_size)-unit(8)>>
       ) do
     compression = @compression_type_codes_reverse[compression_code]
     format = @data_format_codes_reverse[format_code]
@@ -144,7 +155,8 @@ defmodule PPNet.Message.ConfigData do
        compression: compression,
        request_id: request_id,
        request_payload: decoded_payload,
-       datetime: DateTime.from_unix!(datetime)
+       datetime: DateTime.from_unix!(datetime),
+       hop: hop
      }}
   rescue
     error ->

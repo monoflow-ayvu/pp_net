@@ -49,11 +49,11 @@ defmodule PPNetStreamTest do
   end
 
   describe "chunk splitting" do
-    # chunk_size for limit 200 is 200 - 22 = 178; Image.pack/1 adds 25 bytes on
+    # chunk_size for limit 200 is 200 - 22 = 178; Image.pack/1 adds 26 bytes on
     # top of the raw data.
     test "chunk boundaries are byte-identical to the 0.1.5 list-based algorithm" do
       chunk_size = 178
-      pack_overhead = 25
+      pack_overhead = 26
 
       # exact multiple of chunk_size, one byte over, one byte under, arbitrary
       data_sizes = [

@@ -94,8 +94,11 @@ Body: MessagePack array.
 | pulses      | integer           |
 | duration_ms | integer           |
 | datetime    | integer (Unix ts) |
+| hop         | integer (0–255)   |
 
-**Backward compatibility:** A 4-element list without `datetime` is still accepted; `datetime` will be `nil`.
+`hop` is the address of the device that generated the counter on the board's internal bus; `0` is the board itself.
+
+**Backward compatibility:** A 5-element list without `hop` is still accepted; `hop` will be `0`. A 4-element list without `datetime` is still accepted; `datetime` will be `nil` and `hop` will be `0`.
 
 ---
 
@@ -125,15 +128,16 @@ Body: MessagePack array with 11 elements in order:
 
 ### Type 4 — Event
 
-Body: MessagePack array `[kind, data, datetime]`.
+Body: MessagePack array `[kind, data, datetime, hop]`.
 
-| Field    | Type    | Notes                                                                  |
-| -------- | ------- | ---------------------------------------------------------------------- |
-| kind     | integer | 1 = detection                                                          |
-| data     | map     | Example payload: `{"image_id" => <16-byte UUID binary>, "d" => [...]}` |
-| datetime | integer | Unix timestamp (seconds)                                               |
+| Field    | Type            | Notes                                                                                                         |
+| -------- | --------------- | ------------------------------------------------------------------------------------------------------------- |
+| kind     | integer         | 1 = detection                                                                                                 |
+| data     | map             | Example payload: `{"image_id" => <16-byte UUID binary>, "d" => [...]}`                                       |
+| datetime | integer         | Unix timestamp (seconds)                                                                                      |
+| hop      | integer (0–255) | Address of the device that generated the event on the board's internal bus; `0` is the board itself          |
 
-**Backward compatibility:** A 2-element list without `datetime` is still accepted; `datetime` will be `nil`.
+**Backward compatibility:** A 3-element list without `hop` is still accepted; `hop` will be `0`. A 2-element list without `datetime` is still accepted; `datetime` will be `nil` and `hop` will be `0`.
 
 ---
 
@@ -145,13 +149,14 @@ Body: fixed header + raw image data.
 | --------- | ------------- | ------------------------- |
 | id        | binary        | 16 (UUIDv4)               |
 | format    | uint8         | 1 (1=jpeg, 2=webp, 3=png, 4=h264) |
+| hop       | uint8         | 1 (address of the device that captured the image on the board's internal bus; 0 = the board itself) |
 | datetime  | uint32 (Unix) | 4                         |
 | data_size | uint32        | 4                         |
 | data      | binary        | data_size                 |
 
 **H.264 (`4`):** `data` must be an Annex-B byte stream — NAL units prefixed with a `00 00 01` or `00 00 00 01` start code. `pack/1` rejects other framings (e.g. AVCC/length-prefixed) with `%PPNet.PackError{reason: :not_annex_b}`.
 
-**Backward compatibility:** The old format (`id` + `format` + `data` without `datetime`/`data_size`) is still accepted; `datetime` will be `nil`.
+**Backward compatibility:** The v0.1.6 format (without `hop`) is still accepted; `hop` will be `0`. The older format (`id` + `format` + `data` without `datetime`/`data_size`) is still accepted too; `datetime` will be `nil` and `hop` will be `0`.
 
 When the encoded image (or any message) exceeds the channel limit, it is sent as chunked messages (types 6 and 7).
 

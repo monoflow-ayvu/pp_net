@@ -25,6 +25,8 @@ defmodule PPNet.Message.SingleCounter do
     * `pulses` - The number of pulses
     * `duration_ms` - The duration of the counter in milliseconds
     * `datetime` - The timestamp when the counter message was sent
+    * `hop` - Unsigned 8-bit integer (0–255): the address of the device on the board's internal bus
+      that generated the counter; 0 (the default) is the board itself
     """
 
     field(:kind, String.t(), enforce: true)
@@ -32,7 +34,10 @@ defmodule PPNet.Message.SingleCounter do
     field(:pulses, integer(), enforce: true)
     field(:duration_ms, integer(), enforce: true)
     field(:datetime, DateTime.t(), enforce: true)
+    field(:hop, 0..255, default: 0)
   end
+
+  defguardp is_hop(hop) when is_integer(hop) and hop >= 0 and hop <= 255
 
   @impl true
   def type_code, do: @type_code
@@ -41,12 +46,15 @@ defmodule PPNet.Message.SingleCounter do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(%__MODULE__{hop: hop}) when not is_hop(hop), do: PackError.invalid_hop()
+
   def pack(%__MODULE__{
         kind: kind,
         value: value,
         pulses: pulses,
         duration_ms: duration_ms,
-        datetime: %DateTime{} = datetime
+        datetime: %DateTime{} = datetime,
+        hop: hop
       })
       when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) do
     {:ok,
@@ -56,7 +64,8 @@ defmodule PPNet.Message.SingleCounter do
          value,
          pulses,
          duration_ms,
-         DateTime.to_unix(datetime)
+         DateTime.to_unix(datetime),
+         hop
        ],
        iodata: false
      )}
@@ -76,6 +85,20 @@ defmodule PPNet.Message.SingleCounter do
     end
   end
 
+  # credo:disable-for-lines:2
+  def parse([kind, value, pulses, duration_ms, datetime, hop])
+      when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) and is_integer(datetime) and is_hop(hop) do
+    {:ok,
+     %SingleCounter{
+       kind: kind,
+       value: value,
+       pulses: pulses,
+       duration_ms: duration_ms,
+       datetime: DateTime.from_unix!(datetime),
+       hop: hop
+     }}
+  end
+
   def parse([kind, value, pulses, duration_ms, datetime])
       when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) and is_integer(datetime) do
     {:ok,
@@ -84,7 +107,8 @@ defmodule PPNet.Message.SingleCounter do
        value: value,
        pulses: pulses,
        duration_ms: duration_ms,
-       datetime: DateTime.from_unix!(datetime)
+       datetime: DateTime.from_unix!(datetime),
+       hop: 0
      }}
   end
 
@@ -96,7 +120,8 @@ defmodule PPNet.Message.SingleCounter do
        value: value,
        pulses: pulses,
        duration_ms: duration_ms,
-       datetime: nil
+       datetime: nil,
+       hop: 0
      }}
   end
 
