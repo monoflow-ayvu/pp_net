@@ -72,6 +72,8 @@ defmodule PPNet.Message.Hello do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(message)
+
   def pack(%__MODULE__{
         unique_id: unique_id,
         board_identifier: board_identifier,
@@ -104,6 +106,8 @@ defmodule PPNet.Message.Hello do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(packaged_body) when is_binary(packaged_body) do
     with {:ok, unpacked_body} <- Msgpax.unpack(packaged_body) do
       parse(unpacked_body)

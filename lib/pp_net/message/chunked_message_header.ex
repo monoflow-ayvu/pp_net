@@ -56,6 +56,8 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(message)
+
   def pack(%__MODULE__{
         message_module: message_module,
         transaction_id: transaction_id,
@@ -80,6 +82,8 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(
         <<message_module_code::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
           datetime_unix::unsigned-integer-size(4)-unit(8), total_chunks::unsigned-integer-size(2)-unit(8)>>

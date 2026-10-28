@@ -47,6 +47,8 @@ defmodule PPNet.Message.ConfigAck do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(message)
+
   def pack(%__MODULE__{request_id: request_id, status: status, datetime: %DateTime{} = datetime})
       when is_integer(request_id) and request_id >= 0 and status in @statuses do
     {:ok,
@@ -65,6 +67,8 @@ defmodule PPNet.Message.ConfigAck do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(
         <<request_id::unsigned-integer-size(4)-unit(8), status_code::unsigned-integer-size(1)-unit(8),
           datetime::unsigned-integer-size(4)-unit(8)>>

@@ -44,9 +44,13 @@ defmodule PPNet.Message.ChunkedMessageAck do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(message)
+
   def pack(%__MODULE__{} = message), do: pack(message, nil)
 
   @impl true
+  def pack(message, limit)
+
   def pack(
         %__MODULE__{
           transaction_id: transaction_id,
@@ -96,6 +100,8 @@ defmodule PPNet.Message.ChunkedMessageAck do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(
         <<transaction_id::unsigned-integer-size(4)-unit(8), status_code::unsigned-integer-size(1)-unit(8),
           missing_chunks_size::unsigned-integer-size(1)-unit(8),

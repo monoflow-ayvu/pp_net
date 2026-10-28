@@ -49,6 +49,8 @@ defmodule PPNet.Message.ChunkedMessageBody do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(message)
+
   def pack(%__MODULE__{
         transaction_id: transaction_id,
         datetime: %DateTime{} = datetime,
@@ -76,6 +78,8 @@ defmodule PPNet.Message.ChunkedMessageBody do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(
         <<transaction_id::unsigned-integer-size(4)-unit(8), datetime::unsigned-integer-size(4)-unit(8),
           chunk_index::unsigned-integer-size(2)-unit(8), chunk_size::unsigned-integer-size(1)-unit(8),

@@ -7,6 +7,8 @@ defmodule PPNet.Message.SingleCounter do
 
   use TypedStruct
 
+  import PPNet.Guards, only: [is_hop: 1]
+
   alias PPNet.Message.SingleCounter
   alias PPNet.PackError
   alias PPNet.ParseError
@@ -37,8 +39,6 @@ defmodule PPNet.Message.SingleCounter do
     field(:hop, 0..255, default: 0)
   end
 
-  defguardp is_hop(hop) when is_integer(hop) and hop >= 0 and hop <= 255
-
   @impl true
   def type_code, do: @type_code
 
@@ -46,6 +46,8 @@ defmodule PPNet.Message.SingleCounter do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(message)
+
   def pack(%__MODULE__{hop: hop}) when not is_hop(hop), do: PackError.invalid_hop()
 
   def pack(%__MODULE__{
@@ -79,6 +81,8 @@ defmodule PPNet.Message.SingleCounter do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(packaged_body) when is_binary(packaged_body) do
     with {:ok, unpacked_body} <- Msgpax.unpack(packaged_body) do
       parse(unpacked_body)

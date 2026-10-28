@@ -7,6 +7,8 @@ defmodule PPNet.Message.Image do
 
   use TypedStruct
 
+  import PPNet.Guards, only: [is_hop: 1]
+
   alias PPNet.PackError
   alias PPNet.ParseError
 
@@ -42,8 +44,6 @@ defmodule PPNet.Message.Image do
     field(:hop, 0..255, default: 0)
   end
 
-  defguardp is_hop(hop) when is_integer(hop) and hop >= 0 and hop <= 255
-
   @impl true
   def type_code, do: @type_code
 
@@ -51,6 +51,8 @@ defmodule PPNet.Message.Image do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(message)
+
   def pack(%__MODULE__{hop: hop}) when not is_hop(hop), do: PackError.invalid_hop()
 
   # :h264 must be Annex-B framed: data begins with a NAL start code, 00 00 01 or 00 00 00 01.
@@ -90,6 +92,8 @@ defmodule PPNet.Message.Image do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(
         <<id::binary-size(16)-unit(8), format_code::unsigned-integer-size(1)-unit(8),
           datetime::unsigned-integer-size(4)-unit(8), data_size::unsigned-integer-size(4)-unit(8),
