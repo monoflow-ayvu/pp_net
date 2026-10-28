@@ -7,6 +7,7 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   use TypedStruct
 
   alias PPNet.Message.ChunkedMessageHeader
+  alias PPNet.Message.ConfigData
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -23,7 +24,8 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   @ping_type_code 3
   @event_type_code 4
   @image_type_code 5
-  @valid_message_modules [Hello, SingleCounter, Ping, Event, Image]
+  @config_data_type_code 9
+  @valid_message_modules [Hello, SingleCounter, Ping, Event, Image, ConfigData]
 
   typedstruct do
     @typedoc """
@@ -43,6 +45,10 @@ defmodule PPNet.Message.ChunkedMessageHeader do
     field(:total_chunks, non_neg_integer(), enforce: true)
   end
 
+  @doc "The message modules whose messages can be split into chunks."
+  @spec chunkable_modules() :: [module()]
+  def chunkable_modules, do: @valid_message_modules
+
   @impl true
   def type_code, do: @type_code
 
@@ -50,6 +56,8 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(message)
+
   def pack(%__MODULE__{
         message_module: message_module,
         transaction_id: transaction_id,
@@ -57,12 +65,13 @@ defmodule PPNet.Message.ChunkedMessageHeader do
         total_chunks: total_chunks
       })
       when message_module in @valid_message_modules and is_integer(transaction_id) and is_integer(total_chunks) do
-    <<
-      message_module.type_code()::unsigned-integer-size(1)-unit(8),
-      transaction_id::unsigned-integer-size(4)-unit(8),
-      DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
-      total_chunks::unsigned-integer-size(2)-unit(8)
-    >>
+    {:ok,
+     <<
+       message_module.type_code()::unsigned-integer-size(1)-unit(8),
+       transaction_id::unsigned-integer-size(4)-unit(8),
+       DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
+       total_chunks::unsigned-integer-size(2)-unit(8)
+     >>}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
@@ -73,6 +82,8 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(
         <<message_module_code::unsigned-integer-size(1)-unit(8), transaction_id::unsigned-integer-size(4)-unit(8),
           datetime_unix::unsigned-integer-size(4)-unit(8), total_chunks::unsigned-integer-size(2)-unit(8)>>
@@ -103,4 +114,5 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   defp to_message_type(@ping_type_code), do: Ping
   defp to_message_type(@event_type_code), do: Event
   defp to_message_type(@image_type_code), do: Image
+  defp to_message_type(@config_data_type_code), do: ConfigData
 end

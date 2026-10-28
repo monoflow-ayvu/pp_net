@@ -106,6 +106,8 @@ defmodule PPNet.Message.Ping do
                   is_valid_storage(total, used) and is_map(extra) and valid_wifi_lingh(wifi)
 
   @impl true
+  def pack(message)
+
   # credo:disable-for-lines:14
   def pack(%__MODULE__{
         session_id: session_id,
@@ -134,22 +136,23 @@ defmodule PPNet.Message.Ping do
              used,
              extra
            ) do
-    Msgpax.pack!(
-      [
-        pack_session_id(session_id),
-        temperature,
-        uptime_ms,
-        pack_location(location),
-        cpu,
-        tpu_memory_percent,
-        tpu_ping_ms,
-        pack_wifi(wifi),
-        pack_storage(storage),
-        DateTime.to_unix(datetime),
-        extra
-      ],
-      iodata: false
-    )
+    {:ok,
+     Msgpax.pack!(
+       [
+         pack_session_id(session_id),
+         temperature,
+         uptime_ms,
+         pack_location(location),
+         cpu,
+         tpu_memory_percent,
+         tpu_ping_ms,
+         pack_wifi(wifi),
+         pack_storage(storage),
+         DateTime.to_unix(datetime),
+         extra
+       ],
+       iodata: false
+     )}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
@@ -160,6 +163,8 @@ defmodule PPNet.Message.Ping do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(packaged_body) when is_binary(packaged_body) do
     with {:ok, unpacked_body} <- Msgpax.unpack(packaged_body) do
       parse(unpacked_body)

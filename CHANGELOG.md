@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - Unreleased
+
+### Added
+
+- `hop` field in `PPNet.Message.SingleCounter`: an unsigned 8-bit address (0–255) of the device on
+  the board's internal bus; `0` (the default) is the board itself. Wire format is now
+  `[kind, value, pulses, duration_ms, datetime, hop]`; lists of 5 and 4 elements are still read, with
+  `hop: 0`. `pack/1` returns `{:error, %PPNet.PackError{reason: :invalid_hop}}` for an invalid `hop`
+- `hop` field in `PPNet.Message.Event`, same meaning and validation as in `SingleCounter`. Wire
+  format is now `[kind_code, data, datetime, hop]`; lists of 3 and 2 elements are still read, with
+  `hop: 0`
+- `hop` field in `PPNet.Message.Image`, same meaning and validation as in `SingleCounter`. The
+  binary body now carries `hop` (1 byte) right after `format`; the v0.1.6 body and the older one
+  without `datetime` are still read, with `hop: 0`
+- `hop` field in `PPNet.Message.ConfigData`: the origin in the board → server kinds and the
+  destination in the server → board kinds. The binary header is now 15 bytes, with `hop` right
+  after `kind`. There is no legacy clause for the previous 14-byte header, because `ConfigData` was
+  not part of any release and no firmware sends it
+
 ## [0.1.6] - 2026-07-02
 
 ### Added

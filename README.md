@@ -94,8 +94,11 @@ Body: MessagePack array.
 | pulses      | integer           |
 | duration_ms | integer           |
 | datetime    | integer (Unix ts) |
+| hop         | integer (0–255)   |
 
-**Backward compatibility:** A 4-element list without `datetime` is still accepted; `datetime` will be `nil`.
+`hop` is the address of the device that generated the counter on the board's internal bus; `0` is the board itself.
+
+**Backward compatibility:** A 5-element list without `hop` is still accepted; `hop` will be `0`. A 4-element list without `datetime` is still accepted; `datetime` will be `nil` and `hop` will be `0`.
 
 ---
 
@@ -125,15 +128,16 @@ Body: MessagePack array with 11 elements in order:
 
 ### Type 4 — Event
 
-Body: MessagePack array `[kind, data, datetime]`.
+Body: MessagePack array `[kind, data, datetime, hop]`.
 
-| Field    | Type    | Notes                                                                  |
-| -------- | ------- | ---------------------------------------------------------------------- |
-| kind     | integer | 1 = detection                                                          |
-| data     | map     | Example payload: `{"image_id" => <16-byte UUID binary>, "d" => [...]}` |
-| datetime | integer | Unix timestamp (seconds)                                               |
+| Field    | Type            | Notes                                                                                                         |
+| -------- | --------------- | ------------------------------------------------------------------------------------------------------------- |
+| kind     | integer         | 1 = detection                                                                                                 |
+| data     | map             | Example payload: `{"image_id" => <16-byte UUID binary>, "d" => [...]}`                                       |
+| datetime | integer         | Unix timestamp (seconds)                                                                                      |
+| hop      | integer (0–255) | Address of the device that generated the event on the board's internal bus; `0` is the board itself          |
 
-**Backward compatibility:** A 2-element list without `datetime` is still accepted; `datetime` will be `nil`.
+**Backward compatibility:** A 3-element list without `hop` is still accepted; `hop` will be `0`. A 2-element list without `datetime` is still accepted; `datetime` will be `nil` and `hop` will be `0`.
 
 ---
 
@@ -145,13 +149,14 @@ Body: fixed header + raw image data.
 | --------- | ------------- | ------------------------- |
 | id        | binary        | 16 (UUIDv4)               |
 | format    | uint8         | 1 (1=jpeg, 2=webp, 3=png, 4=h264) |
+| hop       | uint8         | 1 (address of the device that captured the image on the board's internal bus; 0 = the board itself) |
 | datetime  | uint32 (Unix) | 4                         |
 | data_size | uint32        | 4                         |
 | data      | binary        | data_size                 |
 
 **H.264 (`4`):** `data` must be an Annex-B byte stream — NAL units prefixed with a `00 00 01` or `00 00 00 01` start code. `pack/1` rejects other framings (e.g. AVCC/length-prefixed) with `%PPNet.PackError{reason: :not_annex_b}`.
 
-**Backward compatibility:** The old format (`id` + `format` + `data` without `datetime`/`data_size`) is still accepted; `datetime` will be `nil`.
+**Backward compatibility:** The v0.1.6 format (without `hop`) is still accepted; `hop` will be `0`. The older format (`id` + `format` + `data` without `datetime`/`data_size`) is still accepted too; `datetime` will be `nil` and `hop` will be `0`.
 
 When the encoded image (or any message) exceeds the channel limit, it is sent as chunked messages (types 6 and 7).
 
@@ -190,9 +195,9 @@ Used when the payload is too large for a single frame (e.g. image). The body is 
 
 ## Usage
 
-- **Encode** a message: `PPNet.encode_message(message)` returns a single binary, or a list `[header_binary | chunk_binaries]` when the message is chunked (e.g. large image). You can pass `limit: n` to force chunking when the encoded size would exceed `n` bytes (default 254).
+- **Encode** a message: `PPNet.encode_message(message)` returns `{:ok, binary}`, or `{:ok, [header_binary | chunk_binaries]}` when the message is chunked (e.g. large image). A message that cannot be packed returns `{:error, %PPNet.PackError{}}`. You can pass `limit: n` to force chunking when the encoded size would exceed `n` bytes (default 254).
 
-- **Encode as a stream**: `PPNet.encode_message_stream(message)` yields the same frames as a lazy `Enumerable`, so large chunked messages can be sent frame-by-frame (e.g. into a chunked HTTP body) with O(chunk size) peak memory instead of materializing the full frame list. Useful on memory-constrained targets.
+- **Encode as a stream**: `PPNet.encode_message_stream(message)` returns `{:ok, frames}` with the same frames as a lazy `Enumerable`, so large chunked messages can be sent frame-by-frame (e.g. into a chunked HTTP body) with O(chunk size) peak memory instead of materializing the full frame list. Useful on memory-constrained targets.
 
 - **Parse** a stream: `PPNet.parse(binary)` returns `%{messages: [...], errors: [...]}`. Each element of `messages` is either a decoded message struct (Hello, Ping, etc.) or a `ChunkedMessageHeader` / `ChunkedMessageBody`. Join all frames (e.g. from a stream) and call `parse` on the concatenated binary.
 
@@ -202,7 +207,7 @@ Example (chunked image):
 
 ```elixir
 image = %PPNet.Message.Image{data: raw_binary, format: :webp, datetime: DateTime.utc_now()}
-[header_bin | chunk_bins] = PPNet.encode_message(image, limit: 200)
+{:ok, [header_bin | chunk_bins]} = PPNet.encode_message(image, limit: 200)
 payload = [header_bin | chunk_bins] |> Enum.join()
 %{messages: [header | body_messages], errors: []} = PPNet.parse(payload)
 {:ok, ^image} = PPNet.chunked_to_message([header | body_messages])

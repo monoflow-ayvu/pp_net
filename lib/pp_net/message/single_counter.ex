@@ -7,6 +7,8 @@ defmodule PPNet.Message.SingleCounter do
 
   use TypedStruct
 
+  import PPNet.Guards, only: [is_hop: 1]
+
   alias PPNet.Message.SingleCounter
   alias PPNet.PackError
   alias PPNet.ParseError
@@ -25,6 +27,8 @@ defmodule PPNet.Message.SingleCounter do
     * `pulses` - The number of pulses
     * `duration_ms` - The duration of the counter in milliseconds
     * `datetime` - The timestamp when the counter message was sent
+    * `hop` - Unsigned 8-bit integer (0–255): the address of the device on the board's internal bus
+      that generated the counter; 0 (the default) is the board itself
     """
 
     field(:kind, String.t(), enforce: true)
@@ -32,6 +36,7 @@ defmodule PPNet.Message.SingleCounter do
     field(:pulses, integer(), enforce: true)
     field(:duration_ms, integer(), enforce: true)
     field(:datetime, DateTime.t(), enforce: true)
+    field(:hop, 0..255, default: 0)
   end
 
   @impl true
@@ -41,24 +46,31 @@ defmodule PPNet.Message.SingleCounter do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(message)
+
+  def pack(%__MODULE__{hop: hop}) when not is_hop(hop), do: PackError.invalid_hop()
+
   def pack(%__MODULE__{
         kind: kind,
         value: value,
         pulses: pulses,
         duration_ms: duration_ms,
-        datetime: %DateTime{} = datetime
+        datetime: %DateTime{} = datetime,
+        hop: hop
       })
       when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) do
-    Msgpax.pack!(
-      [
-        kind,
-        value,
-        pulses,
-        duration_ms,
-        DateTime.to_unix(datetime)
-      ],
-      iodata: false
-    )
+    {:ok,
+     Msgpax.pack!(
+       [
+         kind,
+         value,
+         pulses,
+         duration_ms,
+         DateTime.to_unix(datetime),
+         hop
+       ],
+       iodata: false
+     )}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
@@ -69,10 +81,26 @@ defmodule PPNet.Message.SingleCounter do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(packaged_body) when is_binary(packaged_body) do
     with {:ok, unpacked_body} <- Msgpax.unpack(packaged_body) do
       parse(unpacked_body)
     end
+  end
+
+  # credo:disable-for-lines:2
+  def parse([kind, value, pulses, duration_ms, datetime, hop])
+      when is_binary(kind) and is_integer(pulses) and is_integer(duration_ms) and is_integer(datetime) and is_hop(hop) do
+    {:ok,
+     %SingleCounter{
+       kind: kind,
+       value: value,
+       pulses: pulses,
+       duration_ms: duration_ms,
+       datetime: DateTime.from_unix!(datetime),
+       hop: hop
+     }}
   end
 
   def parse([kind, value, pulses, duration_ms, datetime])
@@ -83,7 +111,8 @@ defmodule PPNet.Message.SingleCounter do
        value: value,
        pulses: pulses,
        duration_ms: duration_ms,
-       datetime: DateTime.from_unix!(datetime)
+       datetime: DateTime.from_unix!(datetime),
+       hop: 0
      }}
   end
 
@@ -95,7 +124,8 @@ defmodule PPNet.Message.SingleCounter do
        value: value,
        pulses: pulses,
        duration_ms: duration_ms,
-       datetime: nil
+       datetime: nil,
+       hop: 0
      }}
   end
 

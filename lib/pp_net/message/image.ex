@@ -7,6 +7,8 @@ defmodule PPNet.Message.Image do
 
   use TypedStruct
 
+  import PPNet.Guards, only: [is_hop: 1]
+
   alias PPNet.PackError
   alias PPNet.ParseError
 
@@ -31,12 +33,15 @@ defmodule PPNet.Message.Image do
       start code); `pack/1` rejects other framings.
     * `data` - Raw image binary
     * `datetime` - Timestamp of the image capture
+    * `hop` - Unsigned 8-bit integer (0–255): the address of the device on the board's internal bus
+      that captured the image; 0 (the default) is the board itself
     """
 
     field(:id, uuidv4(), enforce: true)
     field(:format, format(), enforce: true)
     field(:data, binary(), enforce: true)
     field(:datetime, DateTime.t(), enforce: true)
+    field(:hop, 0..255, default: 0)
   end
 
   @impl true
@@ -46,6 +51,10 @@ defmodule PPNet.Message.Image do
   def datetime(%__MODULE__{datetime: datetime}), do: datetime
 
   @impl true
+  def pack(message)
+
+  def pack(%__MODULE__{hop: hop}) when not is_hop(hop), do: PackError.invalid_hop()
+
   # :h264 must be Annex-B framed: data begins with a NAL start code, 00 00 01 or 00 00 00 01.
   def pack(%__MODULE__{format: :h264, data: <<0, 0, 1, _::binary>>} = message), do: pack_image(message)
   def pack(%__MODULE__{format: :h264, data: <<0, 0, 0, 1, _::binary>>} = message), do: pack_image(message)
@@ -60,17 +69,19 @@ defmodule PPNet.Message.Image do
     {:error, %PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
   end
 
-  defp pack_image(%__MODULE__{id: id, format: format, data: data, datetime: %DateTime{} = datetime})
+  defp pack_image(%__MODULE__{id: id, format: format, data: data, datetime: %DateTime{} = datetime, hop: hop})
        when is_binary(id) and is_binary(data) do
     data_size = byte_size(data)
 
-    <<
-      UUID.string_to_binary!(id)::binary-size(16)-unit(8),
-      @format_to_code[format]::unsigned-integer-size(1)-unit(8),
-      DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
-      data_size::unsigned-integer-size(4)-unit(8),
-      data::binary-size(data_size)-unit(8)
-    >>
+    {:ok,
+     <<
+       UUID.string_to_binary!(id)::binary-size(16)-unit(8),
+       @format_to_code[format]::unsigned-integer-size(1)-unit(8),
+       hop::unsigned-integer-size(1)-unit(8),
+       DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
+       data_size::unsigned-integer-size(4)-unit(8),
+       data::binary-size(data_size)-unit(8)
+     >>}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
@@ -81,6 +92,8 @@ defmodule PPNet.Message.Image do
   end
 
   @impl true
+  def parse(payload)
+
   def parse(
         <<id::binary-size(16)-unit(8), format_code::unsigned-integer-size(1)-unit(8),
           datetime::unsigned-integer-size(4)-unit(8), data_size::unsigned-integer-size(4)-unit(8),
@@ -91,13 +104,35 @@ defmodule PPNet.Message.Image do
        id: UUID.binary_to_string!(id),
        data: data,
        format: @code_to_format[format_code],
-       datetime: DateTime.from_unix!(datetime)
+       datetime: DateTime.from_unix!(datetime),
+       hop: 0
      }}
   end
 
-  @impl true
+  def parse(
+        <<id::binary-size(16)-unit(8), format_code::unsigned-integer-size(1)-unit(8),
+          hop::unsigned-integer-size(1)-unit(8), datetime::unsigned-integer-size(4)-unit(8),
+          data_size::unsigned-integer-size(4)-unit(8), data::binary-size(data_size)-unit(8)>>
+      ) do
+    {:ok,
+     %__MODULE__{
+       id: UUID.binary_to_string!(id),
+       data: data,
+       format: @code_to_format[format_code],
+       datetime: DateTime.from_unix!(datetime),
+       hop: hop
+     }}
+  end
+
   def parse(<<id::binary-size(16)-unit(8), format_code::unsigned-integer-size(1)-unit(8), data::binary>>) do
-    {:ok, %__MODULE__{id: UUID.binary_to_string!(id), data: data, format: @code_to_format[format_code], datetime: nil}}
+    {:ok,
+     %__MODULE__{
+       id: UUID.binary_to_string!(id),
+       data: data,
+       format: @code_to_format[format_code],
+       datetime: nil,
+       hop: 0
+     }}
   end
 
   def parse(data) do
