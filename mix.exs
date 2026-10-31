@@ -40,7 +40,7 @@ defmodule PPNet.MixProject do
       {:reed_solomon_ex, "~> 0.2.0"},
       {:elixir_uuid, "~> 1.2"},
       {:brotli, "~> 0.3.3"},
-      {:jsv, "~> 0.24.0"},
+      {:jsv, "~> 0.26.0"},
       {:nimble_options, "~> 1.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:quokka, "~> 2.11", only: [:dev, :test], runtime: false},
