@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   later. `pack/1` rejects an empty or invalid `mime` (`:invalid_mime`), an invalid `hop`
   (`:invalid_hop`) and a non-serializable or larger than 65 535 bytes `metadata`
   (`:invalid_metadata`). Large documents are chunked like `Image`
+- `PPNet.Message.OTAProgress` (type 13): the GPS reports how far a firmware update (OTA) has gone.
+  Binary body `id | hop | progress | datetime` (22 bytes), where `id` is the `id` of the matching
+  OTA request and `progress` is a percentage from 0 to 100. `parse/1` ignores bytes after
+  `datetime`, so fields can be appended later. `pack/1` rejects a `progress` outside 0–100
+  (`:invalid_progress`) and an invalid `hop` (`:invalid_hop`). Always fits in a single frame
 
 ## [0.2.0] - 2026-10-28
 

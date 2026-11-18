@@ -235,6 +235,25 @@ A document larger than the frame limit is sent as chunked messages (types 6 and 
 
 ---
 
+### Type 13 — OTAProgress
+
+Sent by the GPS to the server to report how far a firmware update (OTA) has gone. Body: binary fields in this order, 22 bytes in total.
+
+| Field    | Type          | Bytes       | Notes                                                                                   |
+| -------- | ------------- | ----------- | --------------------------------------------------------------------------------------- |
+| id       | binary        | 16 (UUIDv4) | `id` of the matching `OTARequest`                                                       |
+| hop      | uint8         | 1           | Address of the device that reports the progress on the board's internal bus; 0 = the board itself |
+| progress | uint8         | 1           | Percentage done, 0–100                                                                  |
+| datetime | uint32 (Unix) | 4           | Report date                                                                             |
+
+`pack/1` returns `%PPNet.PackError{reason: :invalid_progress}` when `progress` is not an integer from 0 to 100, and `reason: :invalid_hop` for an invalid `hop`. `parse/1` returns `%PPNet.ParseError{reason: :unknown_format}` for a `progress` above 100.
+
+**Forward compatibility:** `parse/1` ignores bytes after `datetime`, so new fields can be appended to the end of the body.
+
+An OTAProgress always fits in a single frame and is never chunked.
+
+---
+
 ## Usage
 
 - **Encode** a message: `PPNet.encode_message(message)` returns `{:ok, binary}`, or `{:ok, [header_binary | chunk_binaries]}` when the message is chunked (e.g. large image). A message that cannot be packed returns `{:error, %PPNet.PackError{}}`. You can pass `limit: n` to force chunking when the encoded size would exceed `n` bytes (default 254).

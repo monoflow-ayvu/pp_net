@@ -11,6 +11,7 @@ defmodule PpnetEncodeTest do
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
+  alias PPNet.Message.OTAProgress
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
 
@@ -872,6 +873,67 @@ defmodule PpnetEncodeTest do
                Document.pack(%Document{id: UUID.uuid4(), mime: "text/plain", data: "x", datetime: nil})
 
       assert {:error, %PPNet.PackError{reason: :invalid_struct}} = Document.pack(%{})
+    end
+  end
+
+  describe "encode PPNet.Message.OTAProgress" do
+    test "encode_message/2 and parse/1 keep all fields" do
+      message = %OTAProgress{id: UUID.uuid4(), hop: 7, progress: 42, datetime: ~U[2026-11-18 12:00:00Z]}
+
+      assert {:ok, frame} = PPNet.encode_message(message)
+      assert is_binary(frame)
+      assert %{messages: [^message], errors: []} = PPNet.parse(frame)
+    end
+
+    test "pack/1 writes id, hop, progress and datetime in 22 bytes" do
+      id = UUID.uuid4()
+      datetime = ~U[2026-11-18 12:00:00Z]
+
+      assert {:ok, packed} = OTAProgress.pack(%OTAProgress{id: id, hop: 7, progress: 42, datetime: datetime})
+
+      assert packed ==
+               <<UUID.string_to_binary!(id)::binary, 7, 42,
+                 DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8)>>
+    end
+
+    test "pack/1 accepts progress 0 and 100" do
+      for progress <- [0, 100] do
+        message = %OTAProgress{id: UUID.uuid4(), progress: progress, datetime: ~U[2026-11-18 12:00:00Z]}
+
+        assert {:ok, packed} = OTAProgress.pack(message)
+        assert {:ok, ^message} = OTAProgress.parse(packed)
+      end
+    end
+
+    test "pack/1 refuses progress outside 0..100" do
+      for progress <- [-1, 101, 50.0, "50", nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_progress}} =
+                 OTAProgress.pack(%OTAProgress{
+                   id: UUID.uuid4(),
+                   progress: progress,
+                   datetime: ~U[2026-11-18 12:00:00Z]
+                 })
+      end
+    end
+
+    test "pack/1 refuses an invalid hop" do
+      for hop <- [256, -1, "1", nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_hop}} =
+                 OTAProgress.pack(%OTAProgress{
+                   id: UUID.uuid4(),
+                   hop: hop,
+                   progress: 42,
+                   datetime: ~U[2026-11-18 12:00:00Z]
+                 })
+      end
+    end
+
+    test "pack/1 with invalid struct returns error" do
+      # datetime is required
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               OTAProgress.pack(%OTAProgress{id: UUID.uuid4(), progress: 42, datetime: nil})
+
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} = OTAProgress.pack(%{})
     end
   end
 

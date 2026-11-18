@@ -14,6 +14,7 @@ defmodule PPNetTest do
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
+  alias PPNet.Message.OTAProgress
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
 
@@ -833,6 +834,32 @@ defmodule PPNetTest do
                Document.parse(body <> <<byte_size(list)::16>> <> list)
 
       assert {:error, %PPNet.ParseError{reason: :invalid_metadata}} = Document.parse(body <> <<1::16, 0xC1>>)
+    end
+  end
+
+  describe "decode PPNet.Message.OTAProgress" do
+    setup do
+      {:ok, packed} =
+        OTAProgress.pack(%OTAProgress{id: UUID.uuid4(), progress: 42, datetime: ~U[2026-11-18 12:00:00Z]})
+
+      {:ok, packed: packed}
+    end
+
+    test "parse/1 ignores the bytes after datetime", %{packed: packed} do
+      assert {:ok, message} = OTAProgress.parse(packed)
+      assert {:ok, ^message} = OTAProgress.parse(packed <> <<1, 2, 3>>)
+    end
+
+    test "parse/1 with a truncated body returns error", %{packed: packed} do
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
+               OTAProgress.parse(binary_part(packed, 0, byte_size(packed) - 1))
+    end
+
+    test "parse/1 with progress above 100 returns error", %{packed: packed} do
+      <<id_and_hop::binary-size(17), _progress, datetime::binary>> = packed
+
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
+               OTAProgress.parse(<<id_and_hop::binary, 101, datetime::binary>>)
     end
   end
 
