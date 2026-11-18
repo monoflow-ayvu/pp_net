@@ -203,6 +203,7 @@ defmodule PPNet do
   | 10   | `PPNet.Message.ConfigAck`           |
   | 11   | `PPNet.Message.Document`            |
   | 13   | `PPNet.Message.OTAProgress`         |
+  | 14   | `PPNet.Message.OTAFinish`           |
   """
   alias PPNet.Message.ChunkedMessageAck
   alias PPNet.Message.ChunkedMessageBody
@@ -213,6 +214,7 @@ defmodule PPNet do
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
+  alias PPNet.Message.OTAFinish
   alias PPNet.Message.OTAProgress
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
@@ -234,6 +236,7 @@ defmodule PPNet do
           | ConfigAck.t()
           | Document.t()
           | OTAProgress.t()
+          | OTAFinish.t()
 
   @type encode_message_opts :: [
           limit: pos_integer(),
@@ -323,6 +326,7 @@ defmodule PPNet do
   @config_ack_type_code 10
   @document_type_code 11
   @ota_progress_type_code 13
+  @ota_finish_type_code 14
 
   @type_codes [
     @hello_type_code,
@@ -336,7 +340,8 @@ defmodule PPNet do
     @config_data_type_code,
     @config_ack_type_code,
     @document_type_code,
-    @ota_progress_type_code
+    @ota_progress_type_code,
+    @ota_finish_type_code
   ]
 
   @doc """
@@ -674,6 +679,7 @@ defmodule PPNet do
   defp to_message_type(@config_ack_type_code), do: ConfigAck
   defp to_message_type(@document_type_code), do: Document
   defp to_message_type(@ota_progress_type_code), do: OTAProgress
+  defp to_message_type(@ota_finish_type_code), do: OTAFinish
 
   defp gen_transaction_id do
     <<int::unsigned-integer-size(4)-unit(8)>> = :crypto.strong_rand_bytes(4)

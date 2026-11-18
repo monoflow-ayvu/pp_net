@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   OTA request and `progress` is a percentage from 0 to 100. `parse/1` ignores bytes after
   `datetime`, so fields can be appended later. `pack/1` rejects a `progress` outside 0–100
   (`:invalid_progress`) and an invalid `hop` (`:invalid_hop`). Always fits in a single frame
+- `PPNet.Message.OTAFinish` (type 14): the GPS reports the result of a firmware update (OTA).
+  Binary body `id | hop | success | datetime | error_message_size | error_message`, where `id` is
+  the `id` of the matching OTA request. Always fits in a single frame and is never chunked:
+  `error_message` may use what the frame has left after the 23 bytes of fixed fields (220 bytes with
+  the default limit of 254, less with a smaller `limit`). A `nil` or empty `error_message` is sent
+  as size 0 and parsed back as `nil`. `parse/1` ignores bytes after `error_message`, so fields can
+  be appended later. `pack/1` rejects an `error_message` that is not a UTF-8 string or does not fit
+  (`:invalid_error_message`), a non-boolean `success` (`:invalid_success`) and an invalid `hop`
+  (`:invalid_hop`)
 
 ## [0.2.0] - 2026-10-28
 

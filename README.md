@@ -254,6 +254,29 @@ An OTAProgress always fits in a single frame and is never chunked.
 
 ---
 
+### Type 14 — OTAFinish
+
+Sent by the GPS to the server when a firmware update (OTA) ends, with its result. Body: binary fields in this order.
+
+| Field              | Type          | Bytes              | Notes                                                                                 |
+| ------------------ | ------------- | ------------------ | ------------------------------------------------------------------------------------- |
+| id                 | binary        | 16 (UUIDv4)        | `id` of the matching `OTARequest`                                                     |
+| hop                | uint8         | 1                  | Address of the device that reports the result on the board's internal bus; 0 = the board itself |
+| success            | uint8         | 1                  | `1` = update applied, `0` = update failed                                             |
+| datetime           | uint32 (Unix) | 4                  | End date of the update                                                                |
+| error_message_size | uint8         | 1                  | Length of `error_message`; `0` when there is no message                               |
+| error_message      | string        | error_message_size | Reason of the failure, UTF-8                                                          |
+
+An OTAFinish always fits in a single frame and is never chunked. The fixed fields take 23 bytes, so `error_message` may use what the frame has left: `limit - 11 (frame overhead) - 23`, which is **220 bytes** with the default limit of 254. `PPNet.encode_message(message, limit: n)` lowers the maximum to match a smaller frame.
+
+A `nil` or empty `error_message` is sent as `error_message_size` 0 and parsed back as `nil`.
+
+`pack/1` and `pack/2` return `%PPNet.PackError{reason: :invalid_error_message}` when `error_message` is not `nil` or a UTF-8 string, or does not fit in the frame, `reason: :invalid_success` when `success` is not a boolean, and `reason: :invalid_hop` for an invalid `hop`. `parse/1` returns `%PPNet.ParseError{reason: :unknown_format}` for a `success` byte other than 0 or 1.
+
+**Forward compatibility:** `parse/1` ignores bytes after `error_message`, so new fields can be appended to the end of the body.
+
+---
+
 ## Usage
 
 - **Encode** a message: `PPNet.encode_message(message)` returns `{:ok, binary}`, or `{:ok, [header_binary | chunk_binaries]}` when the message is chunked (e.g. large image). A message that cannot be packed returns `{:error, %PPNet.PackError{}}`. You can pass `limit: n` to force chunking when the encoded size would exceed `n` bytes (default 254).
