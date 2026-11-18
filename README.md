@@ -179,7 +179,19 @@ Used when the payload is too large for a single frame (e.g. image). The body is 
 | datetime       | uint32 (Unix) | 4     |
 | total_chunks   | uint16        | 2     |
 
-`message_module_code` indicates the original message type (1=Hello, 2=SingleCounter, 3=Ping, 4=Event, 5=Image). Total header body: 11 bytes.
+Total header body: 11 bytes.
+
+`message_module` is the type code of the original message. Only these types can be chunked:
+
+| Code | Message       |
+| ---- | ------------- |
+| 1    | Hello         |
+| 2    | SingleCounter |
+| 3    | Ping          |
+| 4    | Event         |
+| 5    | Image         |
+| 9    | ConfigData    |
+| 11   | Document      |
 
 ---
 
@@ -196,6 +208,30 @@ Used when the payload is too large for a single frame (e.g. image). The body is 
 `chunk_size` is the length in bytes of `chunk_data`. Fragments are reassembled by `transaction_id` and ordered by `chunk_index`.
 
 **Backward compatibility:** The old format without `datetime` is still accepted; `datetime` will be `nil`.
+
+---
+
+### Type 11 — Document
+
+A file of any format. The content type is a [MIME type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types) (for example `text/plain` or `application/pdf`), not a fixed enum. Body: binary fields in this order.
+
+| Field         | Type          | Bytes         | Notes                                                                                     |
+| ------------- | ------------- | ------------- | ----------------------------------------------------------------------------------------- |
+| id            | binary        | 16 (UUIDv4)   |                                                                                           |
+| mime_size     | uint8         | 1             | Length of `mime`, 1–255                                                                   |
+| mime          | string        | mime_size     | MIME type of `data`, UTF-8                                                                |
+| hop           | uint8         | 1             | Address of the device that created the document on the board's internal bus; 0 = the board itself |
+| datetime      | uint32 (Unix) | 4             | Creation date                                                                             |
+| data_size     | uint32        | 4             |                                                                                           |
+| data          | binary        | data_size     | File content                                                                              |
+| metadata_size | uint16        | 2             | Length of `metadata`; `0` when the map is empty                                          |
+| metadata      | binary        | metadata_size | MessagePack map with free key/value data (strings, numbers, booleans, nil, lists, maps)   |
+
+`pack/1` returns `%PPNet.PackError{reason: :invalid_mime}` for an empty, non-UTF-8 or longer than 255 bytes `mime`, `reason: :invalid_hop` for an invalid `hop`, and `reason: :invalid_metadata` when `metadata` is not a map, cannot be serialized to MessagePack, or exceeds 65 535 bytes once serialized. Atom keys and values in `metadata` are sent as strings.
+
+**Forward compatibility:** `parse/1` ignores bytes after `metadata`, so new fields can be appended to the end of the body.
+
+A document larger than the frame limit is sent as chunked messages (types 6 and 7).
 
 ---
 

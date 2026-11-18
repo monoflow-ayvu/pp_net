@@ -8,6 +8,7 @@ defmodule PPNet.Message.ChunkedMessageHeader do
 
   alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.ConfigData
+  alias PPNet.Message.Document
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -25,7 +26,8 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   @event_type_code 4
   @image_type_code 5
   @config_data_type_code 9
-  @valid_message_modules [Hello, SingleCounter, Ping, Event, Image, ConfigData]
+  @document_type_code 11
+  @valid_message_modules [Hello, SingleCounter, Ping, Event, Image, ConfigData, Document]
 
   typedstruct do
     @typedoc """
@@ -115,4 +117,5 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   defp to_message_type(@event_type_code), do: Event
   defp to_message_type(@image_type_code), do: Image
   defp to_message_type(@config_data_type_code), do: ConfigData
+  defp to_message_type(@document_type_code), do: Document
 end

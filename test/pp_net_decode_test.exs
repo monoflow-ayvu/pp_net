@@ -10,6 +10,7 @@ defmodule PPNetTest do
   alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.ConfigAck
   alias PPNet.Message.ConfigData
+  alias PPNet.Message.Document
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -799,6 +800,39 @@ defmodule PPNetTest do
 
       assert {:ok, %Image{id: ^id, format: :h264, data: ^data}} =
                PPNet.chunked_to_message([header | chunks])
+    end
+  end
+
+  describe "decode PPNet.Message.Document" do
+    setup do
+      {:ok, packed} =
+        Document.pack(%Document{id: UUID.uuid4(), mime: "text/plain", data: "x", datetime: ~U[2026-11-18 12:00:00Z]})
+
+      # body without metadata_size (2 bytes) and metadata
+      {:ok, packed: packed, body: binary_part(packed, 0, byte_size(packed) - 2)}
+    end
+
+    test "parse/1 ignores the bytes after metadata", %{packed: packed} do
+      assert {:ok, message} = Document.parse(packed)
+      assert {:ok, ^message} = Document.parse(packed <> <<1, 2, 3>>)
+    end
+
+    test "parse/1 with a truncated body returns error", %{packed: packed} do
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
+               Document.parse(binary_part(packed, 0, byte_size(packed) - 1))
+    end
+
+    test "parse/1 with metadata_size larger than the remaining bytes returns error", %{body: body} do
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} = Document.parse(body <> <<10::16, 0x80>>)
+    end
+
+    test "parse/1 with metadata that is not a MessagePack map returns error", %{body: body} do
+      list = Msgpax.pack!([1], iodata: false)
+
+      assert {:error, %PPNet.ParseError{reason: :invalid_metadata}} =
+               Document.parse(body <> <<byte_size(list)::16>> <> list)
+
+      assert {:error, %PPNet.ParseError{reason: :invalid_metadata}} = Document.parse(body <> <<1::16, 0xC1>>)
     end
   end
 
