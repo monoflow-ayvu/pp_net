@@ -11,6 +11,9 @@ defmodule PpnetEncodeTest do
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
+  alias PPNet.Message.OTAFinish
+  alias PPNet.Message.OTAProgress
+  alias PPNet.Message.OTARequest
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
 
@@ -872,6 +875,330 @@ defmodule PpnetEncodeTest do
                Document.pack(%Document{id: UUID.uuid4(), mime: "text/plain", data: "x", datetime: nil})
 
       assert {:error, %PPNet.PackError{reason: :invalid_struct}} = Document.pack(%{})
+    end
+  end
+
+  describe "encode PPNet.Message.OTAProgress" do
+    test "encode_message/2 and parse/1 keep all fields" do
+      message = %OTAProgress{id: UUID.uuid4(), hop: 7, progress: 42, datetime: ~U[2026-11-18 12:00:00Z]}
+
+      assert {:ok, frame} = PPNet.encode_message(message)
+      assert is_binary(frame)
+      assert %{messages: [^message], errors: []} = PPNet.parse(frame)
+    end
+
+    test "pack/1 writes id, hop, progress and datetime in 22 bytes" do
+      id = UUID.uuid4()
+      datetime = ~U[2026-11-18 12:00:00Z]
+
+      assert {:ok, packed} = OTAProgress.pack(%OTAProgress{id: id, hop: 7, progress: 42, datetime: datetime})
+
+      assert packed ==
+               <<UUID.string_to_binary!(id)::binary, 7, 42,
+                 DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8)>>
+    end
+
+    test "pack/1 accepts progress 0 and 100" do
+      for progress <- [0, 100] do
+        message = %OTAProgress{id: UUID.uuid4(), progress: progress, datetime: ~U[2026-11-18 12:00:00Z]}
+
+        assert {:ok, packed} = OTAProgress.pack(message)
+        assert {:ok, ^message} = OTAProgress.parse(packed)
+      end
+    end
+
+    test "pack/1 refuses progress outside 0..100" do
+      for progress <- [-1, 101, 50.0, "50", nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_progress}} =
+                 OTAProgress.pack(%OTAProgress{
+                   id: UUID.uuid4(),
+                   progress: progress,
+                   datetime: ~U[2026-11-18 12:00:00Z]
+                 })
+      end
+    end
+
+    test "pack/1 refuses an invalid hop" do
+      for hop <- [256, -1, "1", nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_hop}} =
+                 OTAProgress.pack(%OTAProgress{
+                   id: UUID.uuid4(),
+                   hop: hop,
+                   progress: 42,
+                   datetime: ~U[2026-11-18 12:00:00Z]
+                 })
+      end
+    end
+
+    test "pack/1 with invalid struct returns error" do
+      # datetime is required
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               OTAProgress.pack(%OTAProgress{id: UUID.uuid4(), progress: 42, datetime: nil})
+
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} = OTAProgress.pack(%{})
+    end
+  end
+
+  describe "encode PPNet.Message.OTAFinish" do
+    test "encode_message/2 and parse/1 keep all fields of a failed update" do
+      message = %OTAFinish{
+        id: UUID.uuid4(),
+        hop: 7,
+        success: false,
+        error_message: "checksum mismatch",
+        datetime: ~U[2026-11-18 12:00:00Z]
+      }
+
+      assert {:ok, frame} = PPNet.encode_message(message)
+      assert is_binary(frame)
+      assert %{messages: [^message], errors: []} = PPNet.parse(frame)
+    end
+
+    test "encode_message/2 and parse/1 keep a successful update without error_message" do
+      message = %OTAFinish{id: UUID.uuid4(), success: true, datetime: ~U[2026-11-18 12:00:00Z]}
+
+      assert message.error_message == nil
+      assert {:ok, frame} = PPNet.encode_message(message)
+      assert %{messages: [^message], errors: []} = PPNet.parse(frame)
+    end
+
+    test "pack/1 writes id, hop, success, datetime, error_message_size and error_message" do
+      id = UUID.uuid4()
+      datetime = ~U[2026-11-18 12:00:00Z]
+
+      assert {:ok, packed} =
+               OTAFinish.pack(%OTAFinish{id: id, hop: 7, success: false, error_message: "boom", datetime: datetime})
+
+      assert packed ==
+               <<UUID.string_to_binary!(id)::binary, 7, 0, DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8),
+                 4, "boom">>
+    end
+
+    test "pack/1 sends an empty error_message as size 0 and parse/1 reads it back as nil" do
+      message = %OTAFinish{id: UUID.uuid4(), success: true, error_message: "", datetime: ~U[2026-11-18 12:00:00Z]}
+
+      assert {:ok, packed} = OTAFinish.pack(message)
+      assert binary_part(packed, byte_size(packed) - 1, 1) == <<0>>
+      assert {:ok, %OTAFinish{error_message: nil}} = OTAFinish.parse(packed)
+    end
+
+    test "pack/1 accepts an error_message that fills the frame up to the default limit" do
+      # 254 (limit) - 11 (frame overhead) - 23 (fixed fields) = 220 bytes
+      error_message = String.duplicate("a", 220)
+
+      message = %OTAFinish{
+        id: UUID.uuid4(),
+        success: false,
+        error_message: error_message,
+        datetime: ~U[2026-11-18 12:00:00Z]
+      }
+
+      assert {:ok, frame} = PPNet.encode_message(message)
+      assert is_binary(frame)
+      assert %{messages: [^message], errors: []} = PPNet.parse(frame)
+    end
+
+    test "pack/1 refuses an error_message that does not fit in the frame" do
+      assert {:error, %PPNet.PackError{reason: :invalid_error_message}} =
+               OTAFinish.pack(%OTAFinish{
+                 id: UUID.uuid4(),
+                 success: false,
+                 error_message: String.duplicate("a", 221),
+                 datetime: ~U[2026-11-18 12:00:00Z]
+               })
+    end
+
+    test "encode_message/2 lowers the error_message maximum with a smaller limit" do
+      # 100 (limit) - 11 (frame overhead) - 23 (fixed fields) = 66 bytes
+      message = %OTAFinish{id: UUID.uuid4(), success: false, datetime: ~U[2026-11-18 12:00:00Z]}
+
+      assert {:ok, frame} = PPNet.encode_message(%{message | error_message: String.duplicate("a", 66)}, limit: 100)
+      assert byte_size(frame) <= 100
+
+      assert {:error, %PPNet.PackError{reason: :invalid_error_message}} =
+               PPNet.encode_message(%{message | error_message: String.duplicate("a", 67)}, limit: 100)
+    end
+
+    test "encode_message/2 refuses to chunk when the limit leaves no room for the fixed fields" do
+      # 11 (frame overhead) + 23 (fixed fields) = 34 bytes, more than the limit of 30
+      message = %OTAFinish{id: UUID.uuid4(), success: true, datetime: ~U[2026-11-18 12:00:00Z]}
+
+      assert {:error, %PPNet.PackError{reason: :cannot_be_chunked}} = PPNet.encode_message(message, limit: 30)
+    end
+
+    test "pack/1 refuses an error_message that is not a UTF-8 string" do
+      for error_message <- [<<0xFF>>, :boom, 1] do
+        assert {:error, %PPNet.PackError{reason: :invalid_error_message}} =
+                 OTAFinish.pack(%OTAFinish{
+                   id: UUID.uuid4(),
+                   success: false,
+                   error_message: error_message,
+                   datetime: ~U[2026-11-18 12:00:00Z]
+                 })
+      end
+    end
+
+    test "pack/1 refuses a success that is not a boolean" do
+      for success <- [nil, 1, "true"] do
+        assert {:error, %PPNet.PackError{reason: :invalid_success}} =
+                 OTAFinish.pack(%OTAFinish{id: UUID.uuid4(), success: success, datetime: ~U[2026-11-18 12:00:00Z]})
+      end
+    end
+
+    test "pack/1 refuses an invalid hop" do
+      for hop <- [256, -1, "1", nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_hop}} =
+                 OTAFinish.pack(%OTAFinish{
+                   id: UUID.uuid4(),
+                   hop: hop,
+                   success: true,
+                   datetime: ~U[2026-11-18 12:00:00Z]
+                 })
+      end
+    end
+
+    test "pack/1 with invalid struct returns error" do
+      # datetime is required
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               OTAFinish.pack(%OTAFinish{id: UUID.uuid4(), success: true, datetime: nil})
+
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} = OTAFinish.pack(%{})
+    end
+  end
+
+  describe "encode PPNet.Message.OTARequest" do
+    test "encode_message/2 and parse/1 keep all fields for each sumtype" do
+      for {sumtype, sum_size} <- [md5: 16, sha256: 32, sha512: 64] do
+        message = %OTARequest{
+          id: UUID.uuid4(),
+          hop: 7,
+          sumtype: sumtype,
+          sum: :crypto.strong_rand_bytes(sum_size),
+          url: "https://example.com/firmware.bin",
+          datetime: ~U[2026-11-18 12:00:00Z]
+        }
+
+        assert {:ok, frame} = PPNet.encode_message(message)
+        assert is_binary(frame)
+        assert %{messages: [^message], errors: []} = PPNet.parse(frame)
+      end
+    end
+
+    test "pack/1 writes id, hop, datetime, sumtype, sum, url_size and url" do
+      id = UUID.uuid4()
+      sum = :crypto.strong_rand_bytes(32)
+      url = "https://example.com/fw.bin"
+      datetime = ~U[2026-11-18 12:00:00Z]
+
+      assert {:ok, packed} =
+               OTARequest.pack(%OTARequest{
+                 id: id,
+                 hop: 7,
+                 sumtype: :sha256,
+                 sum: sum,
+                 url: url,
+                 datetime: datetime
+               })
+
+      assert packed ==
+               <<UUID.string_to_binary!(id)::binary, 7, DateTime.to_unix(datetime)::unsigned-integer-size(4)-unit(8), 1,
+                 sum::binary, byte_size(url)::unsigned-integer-size(2)-unit(8), url::binary>>
+    end
+
+    test "a request with a long url is chunked and reassembled without loss" do
+      # about the size of a presigned S3 url
+      url = "https://bucket.s3.amazonaws.com/firmware.bin?" <> String.duplicate("X-Amz-Signature=abcdef&", 85)
+
+      message = %OTARequest{
+        id: UUID.uuid4(),
+        hop: 3,
+        sumtype: :sha512,
+        sum: :crypto.strong_rand_bytes(64),
+        url: url,
+        datetime: ~U[2026-11-18 12:00:00Z]
+      }
+
+      assert {:ok, [_header | _chunks] = frames} = PPNet.encode_message(message)
+
+      assert %{messages: [%ChunkedMessageHeader{message_module: OTARequest} | _chunks] = decoded, errors: []} =
+               frames
+               |> Enum.join()
+               |> PPNet.parse()
+
+      assert PPNet.chunked_to_message(decoded) == {:ok, message}
+    end
+
+    test "pack/1 refuses a sumtype outside the enum" do
+      for sumtype <- [:sha1, "md5", 0, nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_sumtype}} =
+                 OTARequest.pack(%OTARequest{
+                   id: UUID.uuid4(),
+                   sumtype: sumtype,
+                   sum: :crypto.strong_rand_bytes(16),
+                   url: "https://example.com/fw.bin",
+                   datetime: ~U[2026-11-18 12:00:00Z]
+                 })
+      end
+    end
+
+    test "pack/1 refuses a sum whose size does not match the sumtype" do
+      for {sumtype, sum} <- [
+            md5: :crypto.strong_rand_bytes(32),
+            sha256: :crypto.strong_rand_bytes(16),
+            sha512: :crypto.strong_rand_bytes(32),
+            md5: nil,
+            md5: "d41d8cd98f00b204e9800998ecf8427e"
+          ] do
+        assert {:error, %PPNet.PackError{reason: :invalid_sum}} =
+                 OTARequest.pack(%OTARequest{
+                   id: UUID.uuid4(),
+                   sumtype: sumtype,
+                   sum: sum,
+                   url: "https://example.com/fw.bin",
+                   datetime: ~U[2026-11-18 12:00:00Z]
+                 })
+      end
+    end
+
+    test "pack/1 refuses an invalid url" do
+      for url <- ["", <<0xFF>>, String.duplicate("a", 0x10000), :url, nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_url}} =
+                 OTARequest.pack(%OTARequest{
+                   id: UUID.uuid4(),
+                   sumtype: :md5,
+                   sum: :crypto.strong_rand_bytes(16),
+                   url: url,
+                   datetime: ~U[2026-11-18 12:00:00Z]
+                 })
+      end
+    end
+
+    test "pack/1 refuses an invalid hop" do
+      for hop <- [256, -1, "1", nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_hop}} =
+                 OTARequest.pack(%OTARequest{
+                   id: UUID.uuid4(),
+                   hop: hop,
+                   sumtype: :md5,
+                   sum: :crypto.strong_rand_bytes(16),
+                   url: "https://example.com/fw.bin",
+                   datetime: ~U[2026-11-18 12:00:00Z]
+                 })
+      end
+    end
+
+    test "pack/1 with invalid struct returns error" do
+      # datetime is required
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               OTARequest.pack(%OTARequest{
+                 id: UUID.uuid4(),
+                 sumtype: :md5,
+                 sum: :crypto.strong_rand_bytes(16),
+                 url: "https://example.com/fw.bin",
+                 datetime: nil
+               })
+
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} = OTARequest.pack(%{})
     end
   end
 

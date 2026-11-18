@@ -192,6 +192,7 @@ Total header body: 11 bytes.
 | 5    | Image         |
 | 9    | ConfigData    |
 | 11   | Document      |
+| 12   | OTARequest    |
 
 ---
 
@@ -232,6 +233,72 @@ A file of any format. The content type is a [MIME type](https://developer.mozill
 **Forward compatibility:** `parse/1` ignores bytes after `metadata`, so new fields can be appended to the end of the body.
 
 A document larger than the frame limit is sent as chunked messages (types 6 and 7).
+
+---
+
+### Type 12 — OTARequest
+
+Sent by the server to the GPS to ask for a firmware update (OTA). The GPS downloads the firmware from `url`, checks it against `sum` and reports with `OTAProgress` (type 13) and `OTAFinish` (type 14), both carrying the same `id`. Body: binary fields in this order.
+
+| Field    | Type          | Bytes       | Notes                                                                                  |
+| -------- | ------------- | ----------- | -------------------------------------------------------------------------------------- |
+| id       | binary        | 16 (UUIDv4) | Identifies the OTA operation                                                           |
+| hop      | uint8         | 1           | Address of the device that must apply the update on the board's internal bus; 0 = the board itself |
+| datetime | uint32 (Unix) | 4           | Request date                                                                           |
+| sumtype  | uint8         | 1           | Checksum algorithm: `0` = `md5`, `1` = `sha256`, `2` = `sha512`                        |
+| sum      | binary        | 16/32/64    | Raw checksum bytes (not the hex string); the size comes from `sumtype`                 |
+| url_size | uint16        | 2           | Length of `url`, 1–65 535                                                              |
+| url      | string        | url_size    | Firmware download address, UTF-8                                                       |
+
+`sum` has no size field: its size is 16 bytes for `md5`, 32 for `sha256` and 64 for `sha512`.
+
+`pack/1` returns `%PPNet.PackError{reason: :invalid_sumtype}` for a `sumtype` other than `:md5`, `:sha256` or `:sha512`, `reason: :invalid_sum` when `sum` is not a binary with the size of its `sumtype`, `reason: :invalid_url` for an empty, non-UTF-8 or longer than 65 535 bytes `url`, and `reason: :invalid_hop` for an invalid `hop`. `parse/1` returns `%PPNet.ParseError{reason: :unknown_format}` for an unknown `sumtype` code.
+
+**Forward compatibility:** `parse/1` ignores bytes after `url`, so new fields can be appended to the end of the body.
+
+A request with a long `url`, such as a presigned S3 url, is sent as chunked messages (types 6 and 7).
+
+---
+
+### Type 13 — OTAProgress
+
+Sent by the GPS to the server to report how far a firmware update (OTA) has gone. Body: binary fields in this order, 22 bytes in total.
+
+| Field    | Type          | Bytes       | Notes                                                                                   |
+| -------- | ------------- | ----------- | --------------------------------------------------------------------------------------- |
+| id       | binary        | 16 (UUIDv4) | `id` of the matching `OTARequest`                                                       |
+| hop      | uint8         | 1           | Address of the device that reports the progress on the board's internal bus; 0 = the board itself |
+| progress | uint8         | 1           | Percentage done, 0–100                                                                  |
+| datetime | uint32 (Unix) | 4           | Report date                                                                             |
+
+`pack/1` returns `%PPNet.PackError{reason: :invalid_progress}` when `progress` is not an integer from 0 to 100, and `reason: :invalid_hop` for an invalid `hop`. `parse/1` returns `%PPNet.ParseError{reason: :unknown_format}` for a `progress` above 100.
+
+**Forward compatibility:** `parse/1` ignores bytes after `datetime`, so new fields can be appended to the end of the body.
+
+An OTAProgress always fits in a single frame and is never chunked.
+
+---
+
+### Type 14 — OTAFinish
+
+Sent by the GPS to the server when a firmware update (OTA) ends, with its result. Body: binary fields in this order.
+
+| Field              | Type          | Bytes              | Notes                                                                                 |
+| ------------------ | ------------- | ------------------ | ------------------------------------------------------------------------------------- |
+| id                 | binary        | 16 (UUIDv4)        | `id` of the matching `OTARequest`                                                     |
+| hop                | uint8         | 1                  | Address of the device that reports the result on the board's internal bus; 0 = the board itself |
+| success            | uint8         | 1                  | `1` = update applied, `0` = update failed                                             |
+| datetime           | uint32 (Unix) | 4                  | End date of the update                                                                |
+| error_message_size | uint8         | 1                  | Length of `error_message`; `0` when there is no message                               |
+| error_message      | string        | error_message_size | Reason of the failure, UTF-8                                                          |
+
+An OTAFinish always fits in a single frame and is never chunked. The fixed fields take 23 bytes, so `error_message` may use what the frame has left: `limit - 11 (frame overhead) - 23`, which is **220 bytes** with the default limit of 254. `PPNet.encode_message(message, limit: n)` lowers the maximum to match a smaller frame.
+
+A `nil` or empty `error_message` is sent as `error_message_size` 0 and parsed back as `nil`.
+
+`pack/1` and `pack/2` return `%PPNet.PackError{reason: :invalid_error_message}` when `error_message` is not `nil` or a UTF-8 string, or does not fit in the frame, `reason: :invalid_success` when `success` is not a boolean, and `reason: :invalid_hop` for an invalid `hop`. `parse/1` returns `%PPNet.ParseError{reason: :unknown_format}` for a `success` byte other than 0 or 1.
+
+**Forward compatibility:** `parse/1` ignores bytes after `error_message`, so new fields can be appended to the end of the body.
 
 ---
 
