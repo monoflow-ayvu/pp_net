@@ -16,6 +16,7 @@ defmodule PPNetTest do
   alias PPNet.Message.Image
   alias PPNet.Message.OTAFinish
   alias PPNet.Message.OTAProgress
+  alias PPNet.Message.OTARequest
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
 
@@ -892,6 +893,39 @@ defmodule PPNetTest do
 
       assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
                OTAFinish.parse(<<id_and_hop::binary, 2, rest::binary>>)
+    end
+  end
+
+  describe "decode PPNet.Message.OTARequest" do
+    setup do
+      {:ok, packed} =
+        OTARequest.pack(%OTARequest{
+          id: UUID.uuid4(),
+          sumtype: :md5,
+          sum: :crypto.strong_rand_bytes(16),
+          url: "https://example.com/fw.bin",
+          datetime: ~U[2026-11-18 12:00:00Z]
+        })
+
+      {:ok, packed: packed}
+    end
+
+    test "parse/1 ignores the bytes after url", %{packed: packed} do
+      assert {:ok, message} = OTARequest.parse(packed)
+      assert {:ok, ^message} = OTARequest.parse(packed <> <<1, 2, 3>>)
+    end
+
+    test "parse/1 with a truncated body returns error", %{packed: packed} do
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
+               OTARequest.parse(binary_part(packed, 0, byte_size(packed) - 1))
+    end
+
+    test "parse/1 with an unknown sumtype code returns error", %{packed: packed} do
+      # id (16) + hop (1) + datetime (4)
+      <<id_hop_and_datetime::binary-size(21), _sumtype, rest::binary>> = packed
+
+      assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
+               OTARequest.parse(<<id_hop_and_datetime::binary, 3, rest::binary>>)
     end
   end
 

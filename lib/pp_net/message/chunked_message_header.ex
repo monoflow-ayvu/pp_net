@@ -12,6 +12,7 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
+  alias PPNet.Message.OTARequest
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
   alias PPNet.PackError
@@ -27,7 +28,8 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   @image_type_code 5
   @config_data_type_code 9
   @document_type_code 11
-  @valid_message_modules [Hello, SingleCounter, Ping, Event, Image, ConfigData, Document]
+  @ota_request_type_code 12
+  @valid_message_modules [Hello, SingleCounter, Ping, Event, Image, ConfigData, Document, OTARequest]
 
   typedstruct do
     @typedoc """
@@ -118,4 +120,5 @@ defmodule PPNet.Message.ChunkedMessageHeader do
   defp to_message_type(@image_type_code), do: Image
   defp to_message_type(@config_data_type_code), do: ConfigData
   defp to_message_type(@document_type_code), do: Document
+  defp to_message_type(@ota_request_type_code), do: OTARequest
 end

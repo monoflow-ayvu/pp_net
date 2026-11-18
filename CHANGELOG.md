@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   later. `pack/1` rejects an empty or invalid `mime` (`:invalid_mime`), an invalid `hop`
   (`:invalid_hop`) and a non-serializable or larger than 65 535 bytes `metadata`
   (`:invalid_metadata`). Large documents are chunked like `Image`
+- `PPNet.Message.OTARequest` (type 12): the server asks the GPS for a firmware update (OTA).
+  Binary body `id | hop | datetime | sumtype | sum | url_size | url`, where `sumtype` is `:md5`,
+  `:sha256` or `:sha512` (codes 0, 1, 2) and sets the size of the raw `sum` (16, 32 or 64 bytes).
+  `parse/1` ignores bytes after `url`, so fields can be appended later. `pack/1` rejects a
+  `sumtype` outside the enum (`:invalid_sumtype`), a `sum` whose size does not match the `sumtype`
+  (`:invalid_sum`), an empty, non-UTF-8 or longer than 65 535 bytes `url` (`:invalid_url`) and an
+  invalid `hop` (`:invalid_hop`). A request with a long `url`, such as a presigned S3 url, is chunked
+  like `Image`
 - `PPNet.Message.OTAProgress` (type 13): the GPS reports how far a firmware update (OTA) has gone.
   Binary body `id | hop | progress | datetime` (22 bytes), where `id` is the `id` of the matching
   OTA request and `progress` is a percentage from 0 to 100. `parse/1` ignores bytes after

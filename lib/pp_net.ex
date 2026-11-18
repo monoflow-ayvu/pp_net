@@ -202,7 +202,8 @@ defmodule PPNet do
   | 9    | `PPNet.Message.ConfigData`          |
   | 10   | `PPNet.Message.ConfigAck`           |
   | 11   | `PPNet.Message.Document`            |
-  | 13   | `PPNet.Message.OTAProgress`         |
+  | 12   | `PPNet.Message.OTARequest`          |
+  | 13  | `PPNet.Message.OTAProgress`         |
   | 14   | `PPNet.Message.OTAFinish`           |
   """
   alias PPNet.Message.ChunkedMessageAck
@@ -216,6 +217,7 @@ defmodule PPNet do
   alias PPNet.Message.Image
   alias PPNet.Message.OTAFinish
   alias PPNet.Message.OTAProgress
+  alias PPNet.Message.OTARequest
   alias PPNet.Message.Ping
   alias PPNet.Message.SingleCounter
   alias PPNet.PackError
@@ -235,6 +237,7 @@ defmodule PPNet do
           | ConfigData.t()
           | ConfigAck.t()
           | Document.t()
+          | OTARequest.t()
           | OTAProgress.t()
           | OTAFinish.t()
 
@@ -325,6 +328,7 @@ defmodule PPNet do
   @config_data_type_code 9
   @config_ack_type_code 10
   @document_type_code 11
+  @ota_request_type_code 12
   @ota_progress_type_code 13
   @ota_finish_type_code 14
 
@@ -340,6 +344,7 @@ defmodule PPNet do
     @config_data_type_code,
     @config_ack_type_code,
     @document_type_code,
+    @ota_request_type_code,
     @ota_progress_type_code,
     @ota_finish_type_code
   ]
@@ -678,6 +683,7 @@ defmodule PPNet do
   defp to_message_type(@config_data_type_code), do: ConfigData
   defp to_message_type(@config_ack_type_code), do: ConfigAck
   defp to_message_type(@document_type_code), do: Document
+  defp to_message_type(@ota_request_type_code), do: OTARequest
   defp to_message_type(@ota_progress_type_code), do: OTAProgress
   defp to_message_type(@ota_finish_type_code), do: OTAFinish
 
