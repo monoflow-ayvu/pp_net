@@ -179,7 +179,19 @@ Used when the payload is too large for a single frame (e.g. image). The body is 
 | datetime       | uint32 (Unix) | 4     |
 | total_chunks   | uint16        | 2     |
 
-`message_module_code` indicates the original message type (1=Hello, 2=SingleCounter, 3=Ping, 4=Event, 5=Image, 9=ConfigData, 11=Document). Total header body: 11 bytes.
+Total header body: 11 bytes.
+
+`message_module` is the type code of the original message. Only these types can be chunked:
+
+| Code | Message       |
+| ---- | ------------- |
+| 1    | Hello         |
+| 2    | SingleCounter |
+| 3    | Ping          |
+| 4    | Event         |
+| 5    | Image         |
+| 9    | ConfigData    |
+| 11   | Document      |
 
 ---
 
