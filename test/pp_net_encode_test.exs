@@ -7,6 +7,7 @@ defmodule PpnetEncodeTest do
   alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.ConfigAck
   alias PPNet.Message.ConfigData
+  alias PPNet.Message.Document
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -737,6 +738,140 @@ defmodule PpnetEncodeTest do
                  data: <<1, 2, 3, 4, 5>>,
                  datetime: DateTime.utc_now()
                })
+    end
+  end
+
+  describe "encode PPNet.Message.Document" do
+    test "encode_message/2 and parse/1 keep all fields" do
+      message = %Document{
+        id: UUID.uuid4(),
+        mime: "application/pdf",
+        data: <<0, 1, 2, 255>>,
+        datetime: ~U[2026-11-18 12:00:00Z],
+        hop: 7,
+        metadata: %{"name" => "a.pdf"}
+      }
+
+      assert {:ok, frame} = PPNet.encode_message(message)
+      assert is_binary(frame)
+      assert %{messages: [^message], errors: []} = PPNet.parse(frame)
+    end
+
+    test "pack/1 sends an empty metadata as metadata_size 0" do
+      message = %Document{id: UUID.uuid4(), mime: "text/plain", data: "hello", datetime: ~U[2026-11-18 12:00:00Z]}
+
+      assert message.metadata == %{}
+      assert {:ok, packed} = Document.pack(message)
+      assert byte_size(packed) == 16 + 1 + byte_size("text/plain") + 1 + 4 + 4 + byte_size("hello") + 2
+      assert binary_part(packed, byte_size(packed) - 2, 2) == <<0, 0>>
+      assert {:ok, ^message} = Document.parse(packed)
+    end
+
+    test "pack/1 writes metadata_size before metadata" do
+      message = %Document{
+        id: UUID.uuid4(),
+        mime: "text/plain",
+        data: "hello",
+        datetime: ~U[2026-11-18 12:00:00Z],
+        metadata: %{"k" => "v"}
+      }
+
+      metadata = Msgpax.pack!(%{"k" => "v"}, iodata: false)
+      metadata_size = byte_size(metadata)
+
+      assert {:ok, packed} = Document.pack(message)
+
+      assert binary_part(packed, byte_size(packed) - metadata_size - 2, metadata_size + 2) ==
+               <<metadata_size::unsigned-integer-size(2)-unit(8), metadata::binary>>
+    end
+
+    test "pack/1 accepts nested metadata; atom keys come back as strings" do
+      message = %Document{
+        id: UUID.uuid4(),
+        mime: "text/csv",
+        data: "a,b",
+        datetime: ~U[2026-11-18 12:00:00Z],
+        metadata: %{name: "r.csv", size: 10, tags: ["a", "b"], extra: %{"ok" => true, "ratio" => 0.5, "n" => nil}}
+      }
+
+      assert {:ok, packed} = Document.pack(message)
+
+      assert {:ok, %Document{metadata: metadata}} = Document.parse(packed)
+
+      assert metadata == %{
+               "name" => "r.csv",
+               "size" => 10,
+               "tags" => ["a", "b"],
+               "extra" => %{"ok" => true, "ratio" => 0.5, "n" => nil}
+             }
+    end
+
+    test "pack/1 accepts empty data" do
+      message = %Document{id: UUID.uuid4(), mime: "text/plain", data: "", datetime: ~U[2026-11-18 12:00:00Z]}
+
+      assert {:ok, packed} = Document.pack(message)
+      assert {:ok, ^message} = Document.parse(packed)
+    end
+
+    test "a chunked document is reassembled without loss" do
+      message = %Document{
+        id: UUID.uuid4(),
+        mime: "application/octet-stream",
+        data: :crypto.strong_rand_bytes(10_000),
+        datetime: ~U[2026-11-18 12:00:00Z],
+        hop: 3,
+        metadata: %{"name" => "blob.bin"}
+      }
+
+      assert {:ok, [_header | _chunks] = frames} = PPNet.encode_message(message)
+
+      assert %{messages: [%ChunkedMessageHeader{message_module: Document} | _chunks] = decoded, errors: []} =
+               frames
+               |> Enum.join()
+               |> PPNet.parse()
+
+      assert PPNet.chunked_to_message(decoded) == {:ok, message}
+    end
+
+    test "pack/1 refuses an invalid mime" do
+      for mime <- ["", String.duplicate("a", 256), <<0xFF>>, :pdf, nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_mime}} =
+                 Document.pack(%Document{id: UUID.uuid4(), mime: mime, data: "x", datetime: ~U[2026-11-18 12:00:00Z]})
+      end
+    end
+
+    test "pack/1 refuses an invalid hop" do
+      for hop <- [256, -1, "1", nil] do
+        assert {:error, %PPNet.PackError{reason: :invalid_hop}} =
+                 Document.pack(%Document{
+                   id: UUID.uuid4(),
+                   mime: "text/plain",
+                   data: "x",
+                   datetime: ~U[2026-11-18 12:00:00Z],
+                   hop: hop
+                 })
+      end
+    end
+
+    test "pack/1 refuses metadata that is not a serializable map" do
+      for metadata <- [[a: 1], %{"pid" => self()}, %{"t" => {1, 2}}, %{"big" => String.duplicate("a", 0xFFFF)}] do
+        assert {:error, %PPNet.PackError{reason: :invalid_metadata}} =
+                 Document.pack(%Document{
+                   id: UUID.uuid4(),
+                   mime: "text/plain",
+                   data: "x",
+                   datetime: ~U[2026-11-18 12:00:00Z],
+                   metadata: metadata
+                 })
+      end
+    end
+
+    test "pack/1 with invalid struct returns error" do
+      # datetime is required
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+               Document.pack(%Document{id: UUID.uuid4(), mime: "text/plain", data: "x", datetime: nil})
+
+      assert {:error, %PPNet.PackError{reason: :invalid_struct}} = Document.pack(%{})
     end
   end
 

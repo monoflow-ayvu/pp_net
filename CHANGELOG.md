@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `PPNet.Message.Document` (type 11): a file of any format, identified by a MIME type string
+  instead of a fixed enum. Binary body `id | mime_size | mime | hop | datetime | data_size | data |
+  metadata_size | metadata`, where `metadata` is an optional MessagePack map (`%{}` by default,
+  sent as `metadata_size` 0). `parse/1` ignores bytes after `metadata`, so fields can be appended
+  later. `pack/1` rejects an empty or invalid `mime` (`:invalid_mime`), an invalid `hop`
+  (`:invalid_hop`) and a non-serializable or larger than 65 535 bytes `metadata`
+  (`:invalid_metadata`). Large documents are chunked like `Image`
+
 ## [0.2.0] - 2026-10-28
 
 ### Added
@@ -104,6 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chunked message support
 - Protocol encoding and parsing
 
+[Unreleased]: https://github.com/monoflow-ayvu/pp_net/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.4...v0.1.5

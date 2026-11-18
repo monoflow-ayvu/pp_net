@@ -201,12 +201,14 @@ defmodule PPNet do
   | 8    | `PPNet.Message.ChunkedMessageAck`   |
   | 9    | `PPNet.Message.ConfigData`          |
   | 10   | `PPNet.Message.ConfigAck`           |
+  | 11   | `PPNet.Message.Document`            |
   """
   alias PPNet.Message.ChunkedMessageAck
   alias PPNet.Message.ChunkedMessageBody
   alias PPNet.Message.ChunkedMessageHeader
   alias PPNet.Message.ConfigAck
   alias PPNet.Message.ConfigData
+  alias PPNet.Message.Document
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -228,6 +230,7 @@ defmodule PPNet do
           | ChunkedMessageAck.t()
           | ConfigData.t()
           | ConfigAck.t()
+          | Document.t()
 
   @type encode_message_opts :: [
           limit: pos_integer(),
@@ -315,6 +318,7 @@ defmodule PPNet do
   @chunked_message_ack_type_code 8
   @config_data_type_code 9
   @config_ack_type_code 10
+  @document_type_code 11
 
   @type_codes [
     @hello_type_code,
@@ -326,7 +330,8 @@ defmodule PPNet do
     @chunked_message_body_type_code,
     @chunked_message_ack_type_code,
     @config_data_type_code,
-    @config_ack_type_code
+    @config_ack_type_code,
+    @document_type_code
   ]
 
   @doc """
@@ -662,6 +667,7 @@ defmodule PPNet do
   defp to_message_type(@chunked_message_ack_type_code), do: ChunkedMessageAck
   defp to_message_type(@config_data_type_code), do: ConfigData
   defp to_message_type(@config_ack_type_code), do: ConfigAck
+  defp to_message_type(@document_type_code), do: Document
 
   defp gen_transaction_id do
     <<int::unsigned-integer-size(4)-unit(8)>> = :crypto.strong_rand_bytes(4)
