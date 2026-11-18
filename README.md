@@ -137,6 +137,12 @@ Body: MessagePack array `[kind, data, datetime, hop]`.
 | datetime | integer         | Unix timestamp (seconds)                                                                                      |
 | hop      | integer (0–255) | Address of the device that generated the event on the board's internal bus; `0` is the board itself          |
 
+**Event kinds:** This table is the source of truth for `kind` codes. A new kind only exists once it has been added here (and to `@event_kind_to_code` in `lib/pp_net/message/event.ex`).
+
+| Code | Name (Elixir atom) | Description        | `data`                                                  |
+| ---- | ------------------ | ------------------ | ------------------------------------------------------- |
+| 1    | `detection`        | Object detection   | `{"image_id" => <16-byte UUID binary>, "d" => [...]}`   |
+
 **Backward compatibility:** A 3-element list without `hop` is still accepted; `hop` will be `0`. A 2-element list without `datetime` is still accepted; `datetime` will be `nil` and `hop` will be `0`.
 
 ---
