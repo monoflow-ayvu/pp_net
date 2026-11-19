@@ -394,6 +394,23 @@ defmodule PpnetEncodeTest do
       end
     end
 
+    test "encode_message/2 and parse/1 keep the ble_scan kind" do
+      message = %Event{
+        kind: :ble_scan,
+        data: %{"devices" => [%{"mac" => "00:1A:2B:3C:4D:5E", "rssi" => -60}]},
+        datetime: ~U[2026-11-19 12:00:00Z],
+        hop: 3
+      }
+
+      assert {:ok, frame} = PPNet.encode_message(message)
+      assert %{messages: [^message], errors: []} = PPNet.parse(frame)
+    end
+
+    test "pack/1 sends the ble_scan kind as code 2" do
+      assert {:ok, packed} = Event.pack(%Event{kind: :ble_scan, data: %{}, datetime: ~U[2026-11-19 12:00:00Z]})
+      assert {:ok, [2 | _rest]} = Msgpax.unpack(packed)
+    end
+
     test "parse/1 returns hop 0 when the struct was built without hop" do
       message = %Event{
         kind: :detection,

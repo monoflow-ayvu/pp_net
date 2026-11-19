@@ -14,8 +14,8 @@ defmodule PPNet.Message.Event do
 
   @derive Jason.Encoder
   @type_code 4
-  @type event_kind :: :detection
-  @event_kind_to_code %{detection: 1}
+  @type event_kind :: :detection | :ble_scan
+  @event_kind_to_code %{detection: 1, ble_scan: 2}
   @code_to_event_kind Map.new(@event_kind_to_code, fn {k, v} -> {v, k} end)
   @valid_event_kind_codes Map.values(@event_kind_to_code)
   @valid_event_kinds Map.keys(@event_kind_to_code)
@@ -26,7 +26,7 @@ defmodule PPNet.Message.Event do
 
     ## Fields
 
-    * `kind` - The kind of event (`:detection`)
+    * `kind` - The kind of event (`:detection` or `:ble_scan`)
     * `data` - Arbitrary key/value payload associated with the event
     * `datetime` - Timestamp of the event
     * `hop` - Unsigned 8-bit integer (0–255): the address of the device on the board's internal bus

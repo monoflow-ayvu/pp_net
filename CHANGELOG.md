@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   be appended later. `pack/1` rejects an `error_message` that is not a UTF-8 string or does not fit
   (`:invalid_error_message`), a non-boolean `success` (`:invalid_success`) and an invalid `hop`
   (`:invalid_hop`)
+- `ble_scan` kind in `PPNet.Message.Event` (code 2), for BLE scan results. `data` is a free map.
+  The wire format does not change, but a receiver on an earlier version rejects code 2 with
+  `:unknown_format`, so update the receiver before the senders
 
 ## [0.2.0] - 2026-10-28
 

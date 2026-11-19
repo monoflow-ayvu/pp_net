@@ -718,6 +718,13 @@ defmodule PPNetTest do
              } = PPNet.parse(payload)
     end
 
+    test "parse/1 reads kind code 2 as ble_scan" do
+      datetime = DateTime.to_unix(~U[2026-11-19 12:00:00Z])
+
+      assert {:ok, %Event{kind: :ble_scan, data: %{}, datetime: ~U[2026-11-19 12:00:00Z], hop: 0}} =
+               Event.parse([2, %{}, datetime, 0])
+    end
+
     test "parse/1 with invalid list returns error" do
       # kind code 99 is not a valid event kind
       assert {:error, %PPNet.ParseError{reason: :unknown_format}} =
