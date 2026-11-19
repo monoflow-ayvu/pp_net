@@ -71,18 +71,17 @@ defmodule PpnetEncodeTest do
           board_identifier: "Tester",
           board_version: 17_185,
           boot_id: 87_372_886,
-          ppnet_version: 1,
           unique_id: "TestRunner",
           version: 4660,
-          datetime: ~U[2026-03-26 21:00:55.352750Z]
+          datetime: ~U[2026-03-26 21:00:55Z]
         }
 
-      assert {:ok, frame} = PPNet.encode_message(message)
+      assert {:ok, <<_size, 1, _rest::binary>> = frame} = PPNet.encode_message(message)
 
-      assert frame ==
-               <<51, 1, 151, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101, 115, 116, 101, 114, 205,
-                 18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 165, 48, 46, 50, 46, 48, 206, 105, 197, 158, 135, 43, 29, 69,
-                 217, 24, 65, 68, 62, 0>>
+      # pack/1 sends the library version, not the struct field
+      expected = %{message | ppnet_version: to_string(Application.spec(:pp_net, :vsn))}
+
+      assert %{messages: [^expected], errors: []} = PPNet.parse(frame)
     end
 
     test "message too large is split into chunks" do
@@ -90,7 +89,6 @@ defmodule PpnetEncodeTest do
         board_identifier: "Tester",
         board_version: 17_185,
         boot_id: 87_372_886,
-        ppnet_version: "0.2.0",
         unique_id: "TestRunner",
         version: 4660,
         datetime: ~U[2026-03-26 21:00:55Z]
@@ -110,7 +108,9 @@ defmodule PpnetEncodeTest do
                decoded_chunk.transaction_id == decoded_header.transaction_id
              end)
 
-      assert PPNet.chunked_to_message([decoded_header | decoded_chunks]) == {:ok, hello}
+      expected = %{hello | ppnet_version: to_string(Application.spec(:pp_net, :vsn))}
+
+      assert PPNet.chunked_to_message([decoded_header | decoded_chunks]) == {:ok, expected}
     end
 
     test "pack/1 with invalid struct returns error" do
@@ -122,7 +122,6 @@ defmodule PpnetEncodeTest do
                  version: -1,
                  board_version: 17_185,
                  boot_id: 87_372_886,
-                 ppnet_version: 1,
                  datetime: ~U[2026-03-26 21:00:55.352750Z]
                })
 
@@ -134,7 +133,6 @@ defmodule PpnetEncodeTest do
                  version: 1,
                  board_version: 17_185,
                  boot_id: 87_372_886,
-                 ppnet_version: 1,
                  datetime: ~U[2026-03-26 21:00:55.352750Z]
                })
     end
@@ -1963,7 +1961,6 @@ defmodule PpnetEncodeTest do
         version: 10_000,
         board_version: 10_000,
         boot_id: 1_000_000_000,
-        ppnet_version: 5,
         datetime: ~U[2026-03-27 16:25:12Z]
       }
 
