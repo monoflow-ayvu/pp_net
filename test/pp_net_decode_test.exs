@@ -1137,7 +1137,6 @@ defmodule PPNetTest do
           board_identifier: "Tester",
           board_version: 17_185,
           boot_id: 87_372_886,
-          ppnet_version: 1,
           unique_id: "TestRunner",
           version: 4660,
           datetime: ~U[2026-03-26 21:00:55.352750Z]
@@ -1248,12 +1247,14 @@ defmodule PPNetTest do
                | rest_4
              ] = rest_3
 
+      ppnet_version = to_string(Application.spec(:pp_net, :vsn))
+
       assert [
                %Hello{
                  board_identifier: "Tester",
                  board_version: 17_185,
                  boot_id: 87_372_886,
-                 ppnet_version: "0.2.0",
+                 ppnet_version: ^ppnet_version,
                  unique_id: "TestRunner",
                  version: 4660
                }

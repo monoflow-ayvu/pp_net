@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-19
+
 ### Added
 
 - `PPNet.Message.Document` (type 11): a file of any format, identified by a MIME type string
@@ -141,7 +143,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chunked message support
 - Protocol encoding and parsing
 
-[Unreleased]: https://github.com/monoflow-ayvu/pp_net/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/monoflow-ayvu/pp_net/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/monoflow-ayvu/pp_net/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.4...v0.1.5

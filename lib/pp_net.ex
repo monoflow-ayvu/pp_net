@@ -18,13 +18,12 @@ defmodule PPNet do
       ...>   version: 4660,
       ...>   board_version: 17_185,
       ...>   boot_id: 87_372_886,
-      ...>   ppnet_version: "0.2.0",
       ...>   datetime: ~U[2026-03-26 21:00:55.352750Z]
       ...> } |> PPNet.encode_message()
       {:ok,
        <<51, 1, 151, 170, 84, 101, 115, 116, 82, 117, 110, 110, 101, 114, 166, 84, 101,
          115, 116, 101, 114, 205, 18, 52, 205, 67, 33, 206, 5, 53, 52, 86, 165, 48, 46,
-         50, 46, 48, 206, 105, 197, 158, 135, 43, 29, 69, 217, 24, 65, 68, 62, 0>>}
+         51, 46, 48, 206, 105, 197, 158, 135, 75, 26, 114, 3, 26, 210, 122, 26, 0>>}
 
       iex> %PPNet.Message.SingleCounter{
       ...>   kind: "bar",
@@ -139,7 +138,7 @@ defmodule PPNet do
       ...>   version: 4660,
       ...>   board_version: 17_185,
       ...>   boot_id: 87_372_886,
-      ...>   ppnet_version: "0.2.0",
+      ...>   ppnet_version: "0.3.0",
       ...>   datetime: ~U[2026-03-26 21:00:55Z]
       ...> }
       iex> {:ok, frame} = PPNet.encode_message(hello)
