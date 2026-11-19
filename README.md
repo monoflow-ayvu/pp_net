@@ -132,7 +132,7 @@ Body: MessagePack array `[kind, data, datetime, hop]`.
 
 | Field    | Type            | Notes                                                                                                         |
 | -------- | --------------- | ------------------------------------------------------------------------------------------------------------- |
-| kind     | integer         | 1 = detection                                                                                                 |
+| kind     | integer         | 1 = detection, 2 = ble_scan                                                                                   |
 | data     | map             | Example payload: `{"image_id" => <16-byte UUID binary>, "d" => [...]}`                                       |
 | datetime | integer         | Unix timestamp (seconds)                                                                                      |
 | hop      | integer (0–255) | Address of the device that generated the event on the board's internal bus; `0` is the board itself          |
@@ -142,6 +142,7 @@ Body: MessagePack array `[kind, data, datetime, hop]`.
 | Code | Name (Elixir atom) | Description        | `data`                                                  |
 | ---- | ------------------ | ------------------ | ------------------------------------------------------- |
 | 1    | `detection`        | Object detection   | `{"image_id" => <16-byte UUID binary>, "d" => [...]}`   |
+| 2    | `ble_scan`         | BLE Scan           | Free map                                                |
 
 **Backward compatibility:** A 3-element list without `hop` is still accepted; `hop` will be `0`. A 2-element list without `datetime` is still accepted; `datetime` will be `nil` and `hop` will be `0`.
 
