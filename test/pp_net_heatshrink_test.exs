@@ -32,10 +32,59 @@ defmodule PPNetHeatshrinkTest do
     assert decoded == payload
   end
 
+  test "round-trips output buffer growth boundaries" do
+    for size <- [255, 256, 257, 4095, 4096, 4097, 65_535, 65_536, 65_537],
+        payload <- [
+          :binary.copy(<<0>>, size),
+          for(i <- 0..(size - 1), into: <<>>, do: <<rem(i * 109 + 17, 256)>>)
+        ] do
+      assert {:ok, encoded} = Heatshrink.encode(payload)
+      assert {:ok, decoded} = Heatshrink.decode(encoded)
+      assert decoded == payload
+    end
+  end
+
+  test "decoder handles every one- and two-byte input without crashing" do
+    for byte <- 0..255 do
+      assert_native_result(Heatshrink.decode(<<byte>>))
+    end
+
+    for word <- 0..65_535 do
+      <<word::unsigned-16>>
+      |> Heatshrink.decode()
+      |> assert_native_result()
+    end
+  end
+
+  test "concurrent calls keep native state isolated" do
+    1..16
+    |> Task.async_stream(
+      fn worker ->
+        Enum.each(1..25, fn iteration ->
+          payload = :binary.copy(<<worker, iteration>>, 256 + iteration)
+          assert {:ok, encoded} = Heatshrink.encode(payload)
+          assert {:ok, ^payload} = Heatshrink.decode(encoded)
+
+          <<worker, iteration>>
+          |> :binary.copy(iteration)
+          |> Heatshrink.decode()
+          |> assert_native_result()
+        end)
+      end,
+      max_concurrency: 16,
+      timeout: 30_000,
+      ordered: false
+    )
+    |> Enum.each(fn {:ok, :ok} -> :ok end)
+  end
+
   test "rejects non-binary arguments" do
     for invalid <- [nil, :not_a_binary, 123, [1, 2, 3]] do
       assert_raise ArgumentError, fn -> Heatshrink.encode(invalid) end
       assert_raise ArgumentError, fn -> Heatshrink.decode(invalid) end
     end
   end
+
+  defp assert_native_result({:ok, output}) when is_binary(output), do: output
+  defp assert_native_result(:error), do: :error
 end
