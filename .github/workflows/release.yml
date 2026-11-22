@@ -3,40 +3,205 @@ name: Hex Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  publish:
-    name: Publish
-    runs-on: ubuntu-latest
+  precompile:
+    name: Precompile ${{ matrix.name }}
+    runs-on: ${{ matrix.runs-on }}
+    env:
+      MIX_ENV: prod
+    strategy:
+      matrix:
+        include:
+          - runs-on: ubuntu-latest
+            name: linux
+            count: 2
+          - runs-on: macos-15-intel
+            name: macos
+            count: 2
+          - runs-on: windows-latest
+            name: windows
+            count: 1
+
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Elixir
-        uses: erlef/setup-beam@v1
+      - name: Verify release tag matches VERSION
+        if: github.event_name == 'release'
+        shell: bash
+        run: test "${{ github.event.release.tag_name }}" = "v$(cat VERSION)"
+
+      - uses: erlef/setup-beam@v1
         id: beam
         with:
           version-file: .tool-versions
           version-type: strict
 
-      - name: Restore the deps and _build cache
-        uses: actions/cache@v5
-        id: cache
-        env:
-          MIX_ENV: prod
-          OTP_VERSION: ${{ steps.beam.outputs.otp-version }}
-          ELIXIR_VERSION: ${{ steps.beam.outputs.elixir-version }}
-          MIX_LOCK_HASH: ${{ hashFiles('**/mix.lock') }}
+      - name: Install Linux cross-compilers
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Set up MSVC
+        if: matrix.name == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          path: |
-            deps
-            _build
-          key: publish-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-${{ env.MIX_ENV }}-mixlockhash-${{ env.MIX_LOCK_HASH }}
+          arch: x64
 
       - name: Install dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
         run: mix deps.get
 
-      - name: Run Hex Publish
+      - name: Test native source build
+        shell: bash
+        run: PP_NET_FORCE_BUILD=1 MIX_ENV=test mix test
+
+      - name: Precompile NIF archives
+        shell: bash
+        run: ELIXIR_MAKE_CACHE_DIR="$PWD/cache" mix elixir_make.precompile
+
+      - name: Verify precompiled archives
+        shell: bash
+        run: |
+          shopt -s nullglob
+          archives=(cache/*.tar.gz)
+          checksums=(cache/*.tar.gz.sha256)
+          test "${#archives[@]}" -eq "${{ matrix.count }}"
+          test "${#checksums[@]}" -eq "${{ matrix.count }}"
+          for archive in "${archives[@]}"; do
+            [[ "$archive" == *-nif-2.17-* ]]
+          done
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: precompiled-${{ matrix.name }}
+          path: |
+            cache/*.tar.gz
+            cache/*.tar.gz.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    if: github.event_name == 'release'
+    needs: precompile
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: prod
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify release tag matches VERSION
+        if: github.event_name == 'release'
+        shell: bash
+        run: test "${{ github.event.release.tag_name }}" = "v$(cat VERSION)"
+
+      - uses: erlef/setup-beam@v1
+        id: beam
+        with:
+          version-file: .tool-versions
+          version-type: strict
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Download precompiled archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: precompiled-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify release assets
+        shell: bash
+        run: |
+          shopt -s nullglob
+          archives=(release-assets/*.tar.gz)
+          checksums=(release-assets/*.tar.gz.sha256)
+          test "${#archives[@]}" -eq 5
+          test "${#checksums[@]}" -eq 5
+          expected=(
+            "pp_net-nif-2.17-x86_64-linux-gnu-$(cat VERSION).tar.gz"
+            "pp_net-nif-2.17-aarch64-linux-gnu-$(cat VERSION).tar.gz"
+            "pp_net-nif-2.17-x86_64-apple-darwin-$(cat VERSION).tar.gz"
+            "pp_net-nif-2.17-aarch64-apple-darwin-$(cat VERSION).tar.gz"
+            "pp_net-nif-2.17-x86_64-windows-msvc-$(cat VERSION).tar.gz"
+          )
+          for archive in "${expected[@]}"; do
+            test -f "release-assets/$archive"
+            test -f "release-assets/$archive.sha256"
+          done
+
+      - name: Upload release assets
+        run: gh release upload "${{ github.event.release.tag_name }}" release-assets/* --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate public artifact checksums
+        run: mix elixir_make.checksum --all --print
+
+      - name: Verify checksum map
+        run: |
+          elixir -e '
+            version = File.read!("VERSION") |> String.trim()
+
+            expected =
+              [
+                "x86_64-linux-gnu",
+                "aarch64-linux-gnu",
+                "x86_64-apple-darwin",
+                "aarch64-apple-darwin",
+                "x86_64-windows-msvc"
+              ]
+              |> Enum.map(&"pp_net-nif-2.17-#{&1}-#{version}.tar.gz")
+              |> MapSet.new()
+
+            {checksums, _} = Code.eval_file("checksum.exs")
+
+            valid? =
+              is_map(checksums) and map_size(checksums) == 5 and
+                MapSet.new(Map.keys(checksums)) == expected and
+                Enum.all?(checksums, fn {_name, checksum} ->
+                  Regex.match?(~r/\Asha256:[0-9a-f]{64}\z/, checksum)
+                end)
+
+            unless valid?, do: raise("checksum.exs does not contain exactly five valid SHA-256 entries")
+          '
+
+      - name: Build and verify Hex package
+        shell: bash
+        run: |
+          package_output="$(mix hex.build)"
+          printf '%s\n' "$package_output"
+          required=(
+            checksum.exs
+            Makefile
+            Makefile.win
+            lib/pp_net/heatshrink.ex
+            c_src/pp_net_heatshrink.c
+            c_src/heatshrink/heatshrink_encoder.c
+            c_src/heatshrink/heatshrink_encoder.h
+            c_src/heatshrink/heatshrink_decoder.c
+            c_src/heatshrink/heatshrink_decoder.h
+            c_src/heatshrink/heatshrink_common.h
+            c_src/heatshrink/heatshrink_config.h
+            c_src/heatshrink/LICENSE
+            LICENSE
+          )
+          for path in "${required[@]}"; do
+            if [[ "$package_output" != *"$path"* ]]; then
+              printf 'Missing from Hex package: %s\n' "$path" >&2
+              exit 1
+            fi
+          done
+
+      - name: Publish Hex package
         run: mix hex.publish --yes
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
