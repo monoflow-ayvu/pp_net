@@ -9,6 +9,8 @@
 {
   packages = [
     pkgs.git
+    pkgs.stdenv.cc
+    pkgs.gnumake
     pkgs.nixfmt-rfc-style
   ]
   ++ lib.optionals pkgs.stdenv.isLinux [
