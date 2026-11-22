@@ -54,6 +54,9 @@ defmodule PPNet.Message.Hello do
     * `boot_id` - The boot ID of the board
     * `ppnet_version` - The version of the PPNet library
     * `datetime` - The timestamp when the hello message was sent
+    * `capabilities` - Bitfield of supported compression algorithms: Brotli = `0x01` (bit 0),
+      gzip = `0x02` (bit 1), and Heatshrink = `0x04` (bit 2). These are the only assigned bits;
+      unknown higher bits are retained for forward compatibility.
     """
 
     field(:unique_id, String.t(), enforce: true)
@@ -63,6 +66,7 @@ defmodule PPNet.Message.Hello do
     field(:boot_id, non_neg_integer(), enforce: true)
     field(:ppnet_version, String.t())
     field(:datetime, DateTime.t(), enforce: true)
+    field(:capabilities, non_neg_integer(), default: 0)
   end
 
   @impl true
@@ -80,22 +84,24 @@ defmodule PPNet.Message.Hello do
         version: version,
         board_version: board_version,
         boot_id: boot_id,
-        datetime: %DateTime{} = datetime
+        datetime: %DateTime{} = datetime,
+        capabilities: capabilities
       })
-      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) do
-    {:ok,
-     Msgpax.pack!(
-       [
-         unique_id,
-         board_identifier,
-         version,
-         board_version,
-         boot_id,
-         ppnet_version(),
-         DateTime.to_unix(datetime)
-       ],
-       iodata: false
-     )}
+      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) and is_integer(capabilities) and
+             capabilities >= 0 do
+    fields = [
+      unique_id,
+      board_identifier,
+      version,
+      board_version,
+      boot_id,
+      ppnet_version(),
+      DateTime.to_unix(datetime)
+    ]
+
+    fields = if capabilities == 0, do: fields, else: fields ++ [capabilities]
+
+    {:ok, Msgpax.pack!(fields, iodata: false)}
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
@@ -127,6 +133,7 @@ defmodule PPNet.Message.Hello do
        board_version: board_version,
        boot_id: boot_id,
        ppnet_version: ppnet_version,
+       capabilities: 0,
        datetime: nil
      }}
   end
@@ -142,6 +149,23 @@ defmodule PPNet.Message.Hello do
        board_version: board_version,
        boot_id: boot_id,
        ppnet_version: ppnet_version,
+       capabilities: 0,
+       datetime: DateTime.from_unix!(datetime)
+     }}
+  end
+
+  def parse([unique_id, board_identifier, version, board_version, boot_id, ppnet_version, datetime, capabilities])
+      when is_valid_types_to_parse(unique_id, board_identifier, version, board_version, boot_id, datetime) and
+             is_valid_ppnet_version(ppnet_version) and is_integer(capabilities) and capabilities >= 0 do
+    {:ok,
+     %Hello{
+       unique_id: to_string(unique_id),
+       board_identifier: to_string(board_identifier),
+       version: version,
+       board_version: board_version,
+       boot_id: boot_id,
+       ppnet_version: ppnet_version,
+       capabilities: capabilities,
        datetime: DateTime.from_unix!(datetime)
      }}
   end

@@ -12,6 +12,9 @@ defmodule PPNet.MixProject do
       version: @version,
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      compilers: [:elixir_make] ++ Mix.compilers(),
+      make_clean: ["clean"],
+      make_error_message: "Heatshrink requires make and a C compiler to build its native binding",
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
@@ -40,6 +43,7 @@ defmodule PPNet.MixProject do
       {:reed_solomon_ex, "~> 0.2.0"},
       {:elixir_uuid, "~> 1.2"},
       {:brotli, "~> 0.3.3"},
+      {:elixir_make, "~> 0.10.1", runtime: false},
       {:jsv, "~> 0.28.0"},
       {:nimble_options, "~> 1.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -65,11 +69,11 @@ defmodule PPNet.MixProject do
 
   defp package do
     %{
-      licenses: ["MIT"],
+      licenses: ["MIT", "ISC"],
       links: %{"GitHub" => @source_url},
       maintainers: ["JVMartyns", "Fernando Mumbach"],
       description: "Message protocol with error correction (Reed-Solomon) and framing (COBS)",
-      files: ~w(lib mix.exs README.md CHANGELOG.md LICENSE VERSION)
+      files: ~w(lib c_src Makefile mix.exs README.md CHANGELOG.md LICENSE VERSION)
     }
   end
 

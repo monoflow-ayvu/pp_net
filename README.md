@@ -69,17 +69,20 @@ Hello (1), SingleCounter (2), Ping (3), and Event (4) use **MessagePack** for th
 
 Body: MessagePack array (fields in order).
 
-| Field            | Type              |
-| ---------------- | ----------------- |
-| unique_id        | string            |
-| board_identifier | string            |
-| version          | integer           |
-| board_version    | integer           |
-| boot_id          | integer           |
-| ppnet_version    | integer           |
-| datetime         | integer (Unix ts) |
+| Field            | Type                          |
+| ---------------- | ----------------------------- |
+| unique_id        | string                        |
+| board_identifier | string                        |
+| version          | integer                       |
+| board_version    | integer                       |
+| boot_id          | integer                       |
+| ppnet_version    | integer                       |
+| datetime         | integer (Unix ts)             |
+| capabilities     | integer bitfield (optional)   |
 
-**Backward compatibility:** A 6-element list without `datetime` is still accepted; `datetime` will be `nil`.
+`capabilities` advertises supported compression algorithms: Brotli = `0x01` (bit 0), gzip = `0x02` (bit 1), and Heatshrink = `0x04` (bit 2). These are the only currently assigned bits; receivers retain unknown higher bits for forward compatibility. A zero value is omitted, so newly constructed default Hello messages keep the legacy seven-element body; missing capabilities decode as `0`.
+
+**Backward compatibility:** A 6-element list without `datetime` is still accepted; `datetime` will be `nil` and `capabilities` will be `0`. A 7-element list without `capabilities` is also accepted with `capabilities: 0`.
 
 ---
 
