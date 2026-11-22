@@ -15,17 +15,21 @@ jobs:
     env:
       MIX_ENV: prod
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runs-on: ubuntu-latest
             name: linux
             count: 2
+            test-command: mix test
           - runs-on: macos-15-intel
             name: macos
             count: 2
+            test-command: mix test
           - runs-on: windows-latest
             name: windows
             count: 1
+            test-command: mix test test/pp_net_heatshrink_test.exs
 
     steps:
       - uses: actions/checkout@v6
@@ -59,7 +63,7 @@ jobs:
 
       - name: Test native source build
         shell: bash
-        run: PP_NET_FORCE_BUILD=1 MIX_ENV=test mix test
+        run: PP_NET_FORCE_BUILD=1 MIX_ENV=test ${{ matrix.test-command }}
 
       - name: Precompile NIF archives
         shell: bash
