@@ -69,17 +69,20 @@ Hello (1), SingleCounter (2), Ping (3), and Event (4) use **MessagePack** for th
 
 Body: MessagePack array (fields in order).
 
-| Field            | Type              |
-| ---------------- | ----------------- |
-| unique_id        | string            |
-| board_identifier | string            |
-| version          | integer           |
-| board_version    | integer           |
-| boot_id          | integer           |
-| ppnet_version    | integer           |
-| datetime         | integer (Unix ts) |
+| Field            | Type                          |
+| ---------------- | ----------------------------- |
+| unique_id        | string                        |
+| board_identifier | string                        |
+| version          | integer                       |
+| board_version    | integer                       |
+| boot_id          | integer                       |
+| ppnet_version    | integer                       |
+| datetime         | integer (Unix ts)             |
+| capabilities     | integer bitfield (optional)   |
 
-**Backward compatibility:** A 6-element list without `datetime` is still accepted; `datetime` will be `nil`.
+`Hello.capabilities` is a list of atoms in the Elixir API: `:brotli`, `:gzip`, and/or `:heatshrink`. `pack/1` serializes that list as an integer bitfield: Brotli = `0x01` (bit 0), gzip = `0x02` (bit 1), and Heatshrink = `0x04` (bit 2). Receivers ignore unassigned higher bits. An empty list is omitted from the wire, preserving the legacy seven-element body; missing capabilities decode as `[]`.
+
+**Backward compatibility:** A 6-element list without `datetime` is still accepted; `datetime` will be `nil` and `capabilities` will be `[]`. A 7-element list without `capabilities` is also accepted with `capabilities: []`.
 
 ---
 

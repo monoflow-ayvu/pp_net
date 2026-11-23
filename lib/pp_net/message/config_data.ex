@@ -20,6 +20,7 @@ defmodule PPNet.Message.ConfigData do
 
   import PPNet.Guards, only: [is_hop: 1]
 
+  alias PPNet.Heatshrink
   alias PPNet.PackError
   alias PPNet.ParseError
 
@@ -38,7 +39,7 @@ defmodule PPNet.Message.ConfigData do
   @kind_codes_reverse Map.new(@kind_codes, fn {k, v} -> {v, k} end)
   @data_format_codes %{json: 0, msgpack: 1}
   @data_format_codes_reverse Map.new(@data_format_codes, fn {k, v} -> {v, k} end)
-  @compression_type_codes %{none: 0, brotli: 1}
+  @compression_type_codes %{none: 0, brotli: 1, gzip: 2, heatshrink: 3}
   @compression_type_codes_reverse Map.new(@compression_type_codes, fn {k, v} -> {v, k} end)
 
   @kinds Map.keys(@kind_codes)
@@ -65,7 +66,9 @@ defmodule PPNet.Message.ConfigData do
     * `kind` - Identifies what is being transmitted.
     * `request_id` - Unique identifier of the message.
     * `format` - Format of the data (JSON or MsgPack).
-    * `compression` - Compression of the data (none or Brotli).
+    * `compression` - Compression of the data: none (`0`), Brotli (`1`), gzip (`2`), or
+      Heatshrink (`3`). Heatshrink payloads are raw upstream streams with `window_sz2=8` and
+      `lookahead_sz2=4`.
     * `request_payload` - The payload as a plain Elixir term (map, list, or `nil`) — shape
       depends on `kind`, see `CONTRACT.md`.
     * `datetime` - Date and time of the transmission.
@@ -183,6 +186,8 @@ defmodule PPNet.Message.ConfigData do
 
   defp compress!(data, :none), do: data
 
+  defp compress!(data, :gzip), do: :zlib.gzip(data)
+
   defp compress!(data, :brotli) do
     case :brotli.encode(data) do
       {:ok, compressed} ->
@@ -193,7 +198,19 @@ defmodule PPNet.Message.ConfigData do
     end
   end
 
+  defp compress!(data, :heatshrink) do
+    case Heatshrink.encode(data) do
+      {:ok, compressed} ->
+        compressed
+
+      :error ->
+        raise "Failed to compress data with heatshrink"
+    end
+  end
+
   defp decompress(data, :none), do: data
+
+  defp decompress(data, :gzip), do: :zlib.gunzip(data)
 
   defp decompress(data, :brotli) do
     case :brotli.decode(data) do
@@ -202,6 +219,16 @@ defmodule PPNet.Message.ConfigData do
 
       :error ->
         raise "Failed to decompress data with brotli"
+    end
+  end
+
+  defp decompress(data, :heatshrink) do
+    case Heatshrink.decode(data) do
+      {:ok, decompressed} ->
+        decompressed
+
+      :error ->
+        raise "Failed to decompress data with heatshrink"
     end
   end
 

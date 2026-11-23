@@ -4,6 +4,7 @@ defmodule BackwardCompatibilityTest do
 
   alias PPNet.Message.ChunkedMessageBody
   alias PPNet.Message.ChunkedMessageHeader
+  alias PPNet.Message.ConfigData
   alias PPNet.Message.Event
   alias PPNet.Message.Hello
   alias PPNet.Message.Image
@@ -23,6 +24,7 @@ defmodule BackwardCompatibilityTest do
                messages: [
                  %Hello{
                    ppnet_version: 1,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    version: 4660,
@@ -46,6 +48,7 @@ defmodule BackwardCompatibilityTest do
                messages: [
                  %Hello{
                    ppnet_version: 1,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    version: 4660,
@@ -71,6 +74,7 @@ defmodule BackwardCompatibilityTest do
                messages: [
                  %Hello{
                    ppnet_version: 1,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    version: 4660,
@@ -95,6 +99,7 @@ defmodule BackwardCompatibilityTest do
                messages: [
                  %Hello{
                    ppnet_version: 1,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    version: 4660,
@@ -105,6 +110,120 @@ defmodule BackwardCompatibilityTest do
                ],
                errors: []
              } = PPNet.parse(payload)
+    end
+  end
+
+  describe "PPNet.Message.Hello (from v0.3.0)" do
+    @hello_v0_3_0 <<
+      51,
+      1,
+      151,
+      170,
+      84,
+      101,
+      115,
+      116,
+      82,
+      117,
+      110,
+      110,
+      101,
+      114,
+      166,
+      84,
+      101,
+      115,
+      116,
+      101,
+      114,
+      205,
+      18,
+      52,
+      205,
+      67,
+      33,
+      206,
+      5,
+      53,
+      52,
+      86,
+      165,
+      48,
+      46,
+      51,
+      46,
+      48,
+      206,
+      105,
+      197,
+      158,
+      135,
+      75,
+      26,
+      114,
+      3,
+      26,
+      210,
+      122,
+      26,
+      0
+    >>
+
+    test "decodes the seven-element body without capabilities as an empty list" do
+      assert %{
+               messages: [
+                 %Hello{
+                   ppnet_version: "0.3.0",
+                   capabilities: [],
+                   boot_id: 87_372_886,
+                   board_version: 17_185,
+                   version: 4660,
+                   board_identifier: "Tester",
+                   unique_id: "TestRunner",
+                   datetime: ~U[2026-03-26 21:00:55Z]
+                 }
+               ],
+               errors: []
+             } = PPNet.parse(@hello_v0_3_0)
+    end
+
+    test "keeps encoding the default Hello byte-identical to v0.3.0" do
+      message = %Hello{
+        unique_id: "TestRunner",
+        board_identifier: "Tester",
+        version: 4660,
+        board_version: 17_185,
+        boot_id: 87_372_886,
+        datetime: ~U[2026-03-26 21:00:55Z]
+      }
+
+      assert PPNet.encode_message(message) == {:ok, @hello_v0_3_0}
+    end
+  end
+
+  describe "encode PPNet.Message.ConfigData (from v0.3.0)" do
+    test "keeps request_schema packets with legacy compressions byte-identical" do
+      fixtures = [
+        none:
+          <<3, 9, 3, 1, 1, 1, 2, 1, 1, 5, 105, 198, 175, 104, 1, 14, 4, 110, 117, 108, 108, 142, 160, 15, 54, 146, 103,
+            93, 195, 0>>,
+        brotli:
+          <<3, 9, 3, 1, 1, 1, 2, 1, 6, 1, 105, 198, 175, 104, 1, 18, 8, 139, 1, 128, 110, 117, 108, 108, 3, 200, 30,
+            226, 94, 185, 202, 255, 158, 0>>
+      ]
+
+      for {compression, expected} <- fixtures do
+        message = %ConfigData{
+          kind: :request_schema,
+          request_id: 1,
+          format: :json,
+          compression: compression,
+          request_payload: nil,
+          datetime: ~U[2026-03-27 16:25:12Z]
+        }
+
+        assert PPNet.encode_message(message) == {:ok, expected}
+      end
     end
   end
 

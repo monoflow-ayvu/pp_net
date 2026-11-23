@@ -1,0 +1,26 @@
+PRIV_DIR = $(MIX_APP_PATH)/priv
+OBJECT_DIR = $(MIX_APP_PATH)/obj/pp_net_heatshrink
+NIF = $(PRIV_DIR)/pp_net_heatshrink.dll
+PRIV_DIR_CLEAN = $(subst /,\,$(PRIV_DIR))
+OBJECT_DIR_CLEAN = $(subst /,\,$(OBJECT_DIR))
+C_SRC = $(MAKEDIR)/c_src
+SOURCES = "$(C_SRC)/pp_net_heatshrink.c" \
+	"$(C_SRC)/heatshrink/heatshrink_encoder.c" \
+	"$(C_SRC)/heatshrink/heatshrink_decoder.c"
+
+CFLAGS = /nologo /O2 /W4 /MD /LD /I"$(ERTS_INCLUDE_DIR)" /I"$(C_SRC)/heatshrink"
+
+all: $(NIF)
+
+$(NIF): $(SOURCES)
+	@ if not exist "$(PRIV_DIR)" mkdir "$(PRIV_DIR)"
+	@ if not exist "$(OBJECT_DIR)" mkdir "$(OBJECT_DIR)"
+	$(CC) $(CFLAGS) /Fo"$(OBJECT_DIR)/" /Fe$(NIF) $(SOURCES) /link /IMPLIB:"$(OBJECT_DIR)/pp_net_heatshrink.lib" /INCREMENTAL:NO
+
+clean:
+	@ if exist "$(OBJECT_DIR_CLEAN)" rmdir /s /q "$(OBJECT_DIR_CLEAN)"
+	@ if exist "$(PRIV_DIR_CLEAN)\pp_net_heatshrink.dll" del /q "$(PRIV_DIR_CLEAN)\pp_net_heatshrink.dll"
+	@ if exist "$(PRIV_DIR_CLEAN)\pp_net_heatshrink.lib" del /q "$(PRIV_DIR_CLEAN)\pp_net_heatshrink.lib"
+	@ if exist "$(PRIV_DIR_CLEAN)\pp_net_heatshrink.exp" del /q "$(PRIV_DIR_CLEAN)\pp_net_heatshrink.exp"
+
+.PHONY: all clean

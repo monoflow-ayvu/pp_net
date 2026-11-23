@@ -84,6 +84,38 @@ defmodule PpnetEncodeTest do
       assert %{messages: [^expected], errors: []} = PPNet.parse(frame)
     end
 
+    test "pack/1 omits empty capabilities and encodes atom lists as bitfields" do
+      message = %Hello{
+        board_identifier: "Tester",
+        board_version: 17_185,
+        boot_id: 87_372_886,
+        unique_id: "TestRunner",
+        version: 4660,
+        datetime: ~U[2026-03-26 21:00:55Z]
+      }
+
+      assert {:ok, packed} = Hello.pack(message)
+      assert length(Msgpax.unpack!(packed)) == 7
+
+      for {capabilities, bitfield} <- [
+            {[:brotli], 0b001},
+            {[:gzip], 0b010},
+            {[:heatshrink], 0b100},
+            {[:brotli, :heatshrink], 0b101},
+            {[:brotli, :gzip, :heatshrink], 0b111}
+          ] do
+        capable_message = struct!(message, capabilities: capabilities)
+        assert {:ok, packed} = Hello.pack(capable_message)
+        unpacked = Msgpax.unpack!(packed)
+        assert length(unpacked) == 8
+        assert List.last(unpacked) == bitfield
+
+        assert {:ok, frame} = PPNet.encode_message(capable_message)
+        expected = %{capable_message | ppnet_version: to_string(Application.spec(:pp_net, :vsn))}
+        assert %{messages: [^expected], errors: []} = PPNet.parse(frame)
+      end
+    end
+
     test "message too large is split into chunks" do
       hello = %Hello{
         board_identifier: "Tester",
@@ -135,6 +167,24 @@ defmodule PpnetEncodeTest do
                  boot_id: 87_372_886,
                  datetime: ~U[2026-03-26 21:00:55.352750Z]
                })
+    end
+
+    test "pack/1 rejects invalid capabilities" do
+      message = %Hello{
+        unique_id: "TestRunner",
+        board_identifier: "Tester",
+        version: 1,
+        board_version: 17_185,
+        boot_id: 87_372_886,
+        datetime: ~U[2026-03-26 21:00:55.352750Z]
+      }
+
+      for capabilities <- [-1, 0, 1, 1.0, "1", nil, [:unknown], [:brotli, :unknown], [1]] do
+        assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+                 message
+                 |> struct!(capabilities: capabilities)
+                 |> Hello.pack()
+      end
     end
   end
 
@@ -1517,7 +1567,7 @@ defmodule PpnetEncodeTest do
   describe "encode PPNet.Message.ConfigData" do
     for kind <- Map.keys(@config_data_by_kind),
         format <- [:json, :msgpack],
-        compression <- [:none, :brotli] do
+        compression <- [:none, :brotli, :gzip, :heatshrink] do
       @tag kind: kind, format: format, compression: compression
       test "#{kind} round-trips with format: #{format}, compression: #{compression}",
            %{kind: kind, format: format, compression: compression} do
@@ -1536,6 +1586,50 @@ defmodule PpnetEncodeTest do
         assert %{messages: [decoded], errors: []} = PPNet.parse(encoded)
         assert decoded == message
       end
+    end
+
+    test "gzip uses compression code 2 and RFC 1952 bytes" do
+      payload = %{"version" => 1, "revision" => 1}
+      serialized = Msgpax.pack!(payload, iodata: false)
+
+      message = %ConfigData{
+        kind: :full_report,
+        request_id: 1,
+        format: :msgpack,
+        compression: :gzip,
+        request_payload: payload,
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert {:ok, packed} = ConfigData.pack(message)
+
+      assert <<1, 0, 1::32, 1, 2, _datetime::binary-size(4), data_size::24, compressed::binary-size(data_size)>> =
+               packed
+
+      assert <<0x1F, 0x8B, _rest::binary>> = compressed
+      assert :zlib.gunzip(compressed) == serialized
+    end
+
+    test "Heatshrink uses compression code 3 and a raw upstream stream" do
+      payload = %{"version" => 1, "revision" => 1}
+      serialized = Msgpax.pack!(payload, iodata: false)
+
+      message = %ConfigData{
+        kind: :full_report,
+        request_id: 1,
+        format: :msgpack,
+        compression: :heatshrink,
+        request_payload: payload,
+        datetime: ~U[2026-03-27 16:25:12Z]
+      }
+
+      assert {:ok, packed} = ConfigData.pack(message)
+
+      assert <<1, 0, 1::32, 1, 3, _datetime::binary-size(4), data_size::24, compressed::binary-size(data_size)>> =
+               packed
+
+      refute compressed == serialized
+      assert {:ok, ^serialized} = PPNet.Heatshrink.decode(compressed)
     end
 
     for kind <- [:full_report, :set_config], hop <- [0, 1, 255] do

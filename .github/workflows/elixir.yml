@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MIX_ENV: test
+      PP_NET_FORCE_BUILD: "1"
 
     steps:
       - uses: actions/checkout@v6
