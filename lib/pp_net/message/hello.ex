@@ -7,12 +7,17 @@ defmodule PPNet.Message.Hello do
 
   use TypedStruct
 
+  import Bitwise, only: [band: 2, bor: 2]
+
   alias PPNet.Message.Hello
   alias PPNet.PackError
   alias PPNet.ParseError
 
   @derive Jason.Encoder
   @type_code 1
+
+  @capability_bits [brotli: 0x01, gzip: 0x02, heatshrink: 0x04]
+  @capability_masks Map.new(@capability_bits)
 
   defguard is_valid_types(unique_id, board_identifier, version, board_version, boot_id)
            when is_binary(unique_id) and is_binary(board_identifier) and
@@ -54,9 +59,8 @@ defmodule PPNet.Message.Hello do
     * `boot_id` - The boot ID of the board
     * `ppnet_version` - The version of the PPNet library
     * `datetime` - The timestamp when the hello message was sent
-    * `capabilities` - Bitfield of supported compression algorithms: Brotli = `0x01` (bit 0),
-      gzip = `0x02` (bit 1), and Heatshrink = `0x04` (bit 2). These are the only assigned bits;
-      unknown higher bits are retained for forward compatibility.
+    * `capabilities` - List of supported compression algorithms: `:brotli`, `:gzip`, and
+      `:heatshrink`. The wire format encodes this list as a bitfield; unassigned bits are ignored.
     """
 
     field(:unique_id, String.t(), enforce: true)
@@ -66,7 +70,7 @@ defmodule PPNet.Message.Hello do
     field(:boot_id, non_neg_integer(), enforce: true)
     field(:ppnet_version, String.t())
     field(:datetime, DateTime.t(), enforce: true)
-    field(:capabilities, non_neg_integer(), default: 0)
+    field(:capabilities, list(:brotli | :gzip | :heatshrink), default: [])
   end
 
   @impl true
@@ -87,21 +91,26 @@ defmodule PPNet.Message.Hello do
         datetime: %DateTime{} = datetime,
         capabilities: capabilities
       })
-      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) and is_integer(capabilities) and
-             capabilities >= 0 do
-    fields = [
-      unique_id,
-      board_identifier,
-      version,
-      board_version,
-      boot_id,
-      ppnet_version(),
-      DateTime.to_unix(datetime)
-    ]
+      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) and is_list(capabilities) do
+    case capabilities_to_bitfield(capabilities) do
+      {:ok, capability_bitfield} ->
+        fields = [
+          unique_id,
+          board_identifier,
+          version,
+          board_version,
+          boot_id,
+          ppnet_version(),
+          DateTime.to_unix(datetime)
+        ]
 
-    fields = if capabilities == 0, do: fields, else: fields ++ [capabilities]
+        fields = if capability_bitfield == 0, do: fields, else: fields ++ [capability_bitfield]
 
-    {:ok, Msgpax.pack!(fields, iodata: false)}
+        {:ok, Msgpax.pack!(fields, iodata: false)}
+
+      :error ->
+        {:error, %PackError{message: "Invalid struct provided to pack/1", reason: :invalid_struct}}
+    end
   rescue
     error ->
       {:error, %PackError{message: "Invalid struct provided to pack/1", reason: {error, __STACKTRACE__}}}
@@ -133,7 +142,7 @@ defmodule PPNet.Message.Hello do
        board_version: board_version,
        boot_id: boot_id,
        ppnet_version: ppnet_version,
-       capabilities: 0,
+       capabilities: [],
        datetime: nil
      }}
   end
@@ -149,14 +158,23 @@ defmodule PPNet.Message.Hello do
        board_version: board_version,
        boot_id: boot_id,
        ppnet_version: ppnet_version,
-       capabilities: 0,
+       capabilities: [],
        datetime: DateTime.from_unix!(datetime)
      }}
   end
 
-  def parse([unique_id, board_identifier, version, board_version, boot_id, ppnet_version, datetime, capabilities])
+  def parse([
+        unique_id,
+        board_identifier,
+        version,
+        board_version,
+        boot_id,
+        ppnet_version,
+        datetime,
+        capability_bitfield
+      ])
       when is_valid_types_to_parse(unique_id, board_identifier, version, board_version, boot_id, datetime) and
-             is_valid_ppnet_version(ppnet_version) and is_integer(capabilities) and capabilities >= 0 do
+             is_valid_ppnet_version(ppnet_version) and is_integer(capability_bitfield) and capability_bitfield >= 0 do
     {:ok,
      %Hello{
        unique_id: to_string(unique_id),
@@ -165,7 +183,7 @@ defmodule PPNet.Message.Hello do
        board_version: board_version,
        boot_id: boot_id,
        ppnet_version: ppnet_version,
-       capabilities: capabilities,
+       capabilities: capabilities_from_bitfield(capability_bitfield),
        datetime: DateTime.from_unix!(datetime)
      }}
   end
@@ -177,6 +195,23 @@ defmodule PPNet.Message.Hello do
        reason: :unknown_format,
        data: {:unpacked_body, unpacked_body}
      }}
+  end
+
+  defp capabilities_to_bitfield(capabilities), do: capabilities_to_bitfield(capabilities, 0)
+
+  defp capabilities_to_bitfield([], bitfield), do: {:ok, bitfield}
+
+  defp capabilities_to_bitfield([capability | rest], bitfield) do
+    case Map.fetch(@capability_masks, capability) do
+      {:ok, mask} -> capabilities_to_bitfield(rest, bor(bitfield, mask))
+      :error -> :error
+    end
+  end
+
+  defp capabilities_to_bitfield(_invalid, _bitfield), do: :error
+
+  defp capabilities_from_bitfield(bitfield) do
+    for {capability, mask} <- @capability_bits, band(bitfield, mask) != 0, do: capability
   end
 
   defp ppnet_version, do: to_string(Application.spec(:pp_net, :vsn))

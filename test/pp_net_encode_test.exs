@@ -84,7 +84,7 @@ defmodule PpnetEncodeTest do
       assert %{messages: [^expected], errors: []} = PPNet.parse(frame)
     end
 
-    test "pack/1 omits zero capabilities and preserves advertised bits" do
+    test "pack/1 omits empty capabilities and encodes atom lists as bitfields" do
       message = %Hello{
         board_identifier: "Tester",
         board_version: 17_185,
@@ -97,12 +97,18 @@ defmodule PpnetEncodeTest do
       assert {:ok, packed} = Hello.pack(message)
       assert length(Msgpax.unpack!(packed)) == 7
 
-      for capabilities <- [0b001, 0b010, 0b100, 0b111, 0x80] do
+      for {capabilities, bitfield} <- [
+            {[:brotli], 0b001},
+            {[:gzip], 0b010},
+            {[:heatshrink], 0b100},
+            {[:brotli, :heatshrink], 0b101},
+            {[:brotli, :gzip, :heatshrink], 0b111}
+          ] do
         capable_message = struct!(message, capabilities: capabilities)
         assert {:ok, packed} = Hello.pack(capable_message)
         unpacked = Msgpax.unpack!(packed)
         assert length(unpacked) == 8
-        assert List.last(unpacked) == capabilities
+        assert List.last(unpacked) == bitfield
 
         assert {:ok, frame} = PPNet.encode_message(capable_message)
         expected = %{capable_message | ppnet_version: to_string(Application.spec(:pp_net, :vsn))}
@@ -173,7 +179,7 @@ defmodule PpnetEncodeTest do
         datetime: ~U[2026-03-26 21:00:55.352750Z]
       }
 
-      for capabilities <- [-1, 1.0, "1", nil] do
+      for capabilities <- [-1, 0, 1, 1.0, "1", nil, [:unknown], [:brotli, :unknown], [1]] do
         assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
                  message
                  |> struct!(capabilities: capabilities)

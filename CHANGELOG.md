@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Optional `Hello.capabilities` bitfield for advertising Brotli (`0x01`), gzip (`0x02`), and
-  Heatshrink (`0x04`) support. Zero remains the default and is omitted, preserving the legacy
-  seven-element wire body; older six- and seven-element bodies decode with no capabilities
+- Optional `Hello.capabilities` list advertising `:brotli`, `:gzip`, and `:heatshrink`, serialized as
+  a compact wire bitfield. The empty default is omitted, preserving the legacy seven-element wire
+  body; older six- and seven-element bodies decode with no capabilities
 - `ConfigData` compression with gzip (code `2`) and raw upstream Heatshrink streams (code `3`,
   fixed `window_sz2=8`, `lookahead_sz2=4`), backed by the vendored Heatshrink 0.4.1 native binding
 - Precompiled Heatshrink NIFs for Linux x86_64/aarch64 GNU, macOS x86_64/arm64, and Windows

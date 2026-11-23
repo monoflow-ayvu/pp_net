@@ -80,9 +80,9 @@ Body: MessagePack array (fields in order).
 | datetime         | integer (Unix ts)             |
 | capabilities     | integer bitfield (optional)   |
 
-`capabilities` advertises supported compression algorithms: Brotli = `0x01` (bit 0), gzip = `0x02` (bit 1), and Heatshrink = `0x04` (bit 2). These are the only currently assigned bits; receivers retain unknown higher bits for forward compatibility. A zero value is omitted, so newly constructed default Hello messages keep the legacy seven-element body; missing capabilities decode as `0`.
+`Hello.capabilities` is a list of atoms in the Elixir API: `:brotli`, `:gzip`, and/or `:heatshrink`. `pack/1` serializes that list as an integer bitfield: Brotli = `0x01` (bit 0), gzip = `0x02` (bit 1), and Heatshrink = `0x04` (bit 2). Receivers ignore unassigned higher bits. An empty list is omitted from the wire, preserving the legacy seven-element body; missing capabilities decode as `[]`.
 
-**Backward compatibility:** A 6-element list without `datetime` is still accepted; `datetime` will be `nil` and `capabilities` will be `0`. A 7-element list without `capabilities` is also accepted with `capabilities: 0`.
+**Backward compatibility:** A 6-element list without `datetime` is still accepted; `datetime` will be `nil` and `capabilities` will be `[]`. A 7-element list without `capabilities` is also accepted with `capabilities: []`.
 
 ---
 

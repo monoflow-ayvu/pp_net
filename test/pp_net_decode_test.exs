@@ -526,7 +526,7 @@ defmodule PPNetTest do
                messages: [
                  %Hello{
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    version: 4660,
@@ -551,7 +551,7 @@ defmodule PPNetTest do
                messages: [
                  %Hello{
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    version: 4660,
@@ -564,11 +564,18 @@ defmodule PPNetTest do
              } = PPNet.parse(payload)
     end
 
-    test "parse/1 preserves valid eight-element capability bitfields" do
+    test "parse/1 converts capability bitfields to atoms and ignores unassigned bits" do
       base = ["UniqueId", "BoardId", 1, 1, 1, "0.2.0", DateTime.to_unix(~U[2026-03-27 11:33:02Z])]
 
-      for capabilities <- [0b001, 0b010, 0b100, 0b111, 0x80] do
-        assert {:ok, %Hello{capabilities: ^capabilities}} = Hello.parse(base ++ [capabilities])
+      for {bitfield, capabilities} <- [
+            {0b001, [:brotli]},
+            {0b010, [:gzip]},
+            {0b100, [:heatshrink]},
+            {0b111, [:brotli, :gzip, :heatshrink]},
+            {0x80, []},
+            {0x81, [:brotli]}
+          ] do
+        assert {:ok, %Hello{capabilities: ^capabilities}} = Hello.parse(base ++ [bitfield])
       end
     end
 
@@ -595,7 +602,7 @@ defmodule PPNetTest do
                  %Hello{
                    version: 4660,
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    board_identifier: "Tester",
@@ -623,7 +630,7 @@ defmodule PPNetTest do
                  %Hello{
                    version: 4660,
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    board_identifier: "Tester",
@@ -651,7 +658,7 @@ defmodule PPNetTest do
                  %Hello{
                    version: 4660,
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    board_identifier: "Tester",
@@ -679,7 +686,7 @@ defmodule PPNetTest do
                  %Hello{
                    version: 4660,
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    board_identifier: "Tester",
@@ -707,7 +714,7 @@ defmodule PPNetTest do
                  %Hello{
                    version: 4660,
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    board_identifier: "Tester",

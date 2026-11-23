@@ -23,7 +23,7 @@ defmodule BackwardCompatibilityTest do
                messages: [
                  %Hello{
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    version: 4660,
@@ -47,7 +47,7 @@ defmodule BackwardCompatibilityTest do
                messages: [
                  %Hello{
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    version: 4660,
@@ -73,7 +73,7 @@ defmodule BackwardCompatibilityTest do
                messages: [
                  %Hello{
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    version: 4660,
@@ -98,7 +98,7 @@ defmodule BackwardCompatibilityTest do
                messages: [
                  %Hello{
                    ppnet_version: 1,
-                   capabilities: 0,
+                   capabilities: [],
                    boot_id: 87_372_886,
                    board_version: 17_185,
                    version: 4660,
