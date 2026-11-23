@@ -208,4 +208,6 @@ jobs:
       - name: Publish Hex package
         run: mix hex.publish --yes
         env:
+          # ex_doc is a dev-only dependency, and hex.publish builds the docs
+          MIX_ENV: dev
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
