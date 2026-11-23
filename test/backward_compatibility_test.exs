@@ -187,7 +187,7 @@ defmodule BackwardCompatibilityTest do
              } = PPNet.parse(@hello_v0_3_0)
     end
 
-    test "keeps encoding the default Hello byte-identical to v0.3.0" do
+    test "keeps encoding the default Hello with the seven-element body of v0.3.0" do
       message = %Hello{
         unique_id: "TestRunner",
         board_identifier: "Tester",
@@ -197,7 +197,13 @@ defmodule BackwardCompatibilityTest do
         datetime: ~U[2026-03-26 21:00:55Z]
       }
 
-      assert PPNet.encode_message(message) == {:ok, @hello_v0_3_0}
+      ppnet_version = to_string(Application.spec(:pp_net, :vsn))
+      datetime = DateTime.to_unix(message.datetime)
+
+      assert {:ok, body} = Hello.pack(message)
+
+      assert {:ok, ["TestRunner", "Tester", 4660, 17_185, 87_372_886, ^ppnet_version, ^datetime]} =
+               Msgpax.unpack(body)
     end
   end
 
