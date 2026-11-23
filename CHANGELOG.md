@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-23
+
 ### Added
 
 - Optional `Hello.capabilities` list advertising `:brotli`, `:gzip`, and `:heatshrink`, serialized as
@@ -154,7 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chunked message support
 - Protocol encoding and parsing
 
-[Unreleased]: https://github.com/monoflow-ayvu/pp_net/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/monoflow-ayvu/pp_net/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/monoflow-ayvu/pp_net/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/monoflow-ayvu/pp_net/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/monoflow-ayvu/pp_net/compare/v0.1.5...v0.1.6
