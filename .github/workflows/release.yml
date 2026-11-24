@@ -82,7 +82,7 @@ jobs:
           done
 
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: precompiled-${{ matrix.name }}
           path: |
@@ -116,7 +116,7 @@ jobs:
         run: mix deps.get
 
       - name: Download precompiled archives
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: precompiled-*
           path: release-assets
