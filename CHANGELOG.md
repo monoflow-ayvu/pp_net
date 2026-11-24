@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional open `Hello.extra` MessagePack map at wire index 8 for arbitrary data such as cellular
+  identifiers. Non-empty maps always include the capabilities slot at index 7; empty maps preserve
+  the existing seven- and eight-element wire bodies
+
 ## [0.4.1] - 2026-11-23
 
 ### Fixed

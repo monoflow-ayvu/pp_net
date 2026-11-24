@@ -79,10 +79,13 @@ Body: MessagePack array (fields in order).
 | ppnet_version    | integer                       |
 | datetime         | integer (Unix ts)             |
 | capabilities     | integer bitfield (optional)   |
+| extra            | map (optional)                |
 
 `Hello.capabilities` is a list of atoms in the Elixir API: `:brotli`, `:gzip`, and/or `:heatshrink`. `pack/1` serializes that list as an integer bitfield: Brotli = `0x01` (bit 0), gzip = `0x02` (bit 1), and Heatshrink = `0x04` (bit 2). Receivers ignore unassigned higher bits. An empty list is omitted from the wire, preserving the legacy seven-element body; missing capabilities decode as `[]`.
 
-**Backward compatibility:** A 6-element list without `datetime` is still accepted; `datetime` will be `nil` and `capabilities` will be `[]`. A 7-element list without `capabilities` is also accepted with `capabilities: []`.
+`Hello.extra` is an open map for arbitrary key/value data, including cellular identifiers such as `imei`, `imsi`, and `iccid`. Unknown keys and nested MessagePack values are preserved. A non-empty map is encoded at index 8; the capabilities bitfield is then always present at index 7, using `0` when there are no capabilities. An empty map is omitted.
+
+**Backward compatibility:** A 6-element list without `datetime` is still accepted; `datetime` will be `nil` and `capabilities` will be `[]`. Seven- and eight-element lists without `extra` are also accepted with `extra: %{}`. Missing capabilities decode as `[]`.
 
 ---
 

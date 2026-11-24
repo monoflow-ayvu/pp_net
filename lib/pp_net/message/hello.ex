@@ -61,6 +61,7 @@ defmodule PPNet.Message.Hello do
     * `datetime` - The timestamp when the hello message was sent
     * `capabilities` - List of supported compression algorithms: `:brotli`, `:gzip`, and
       `:heatshrink`. The wire format encodes this list as a bitfield; unassigned bits are ignored.
+    * `extra` - Optional arbitrary key/value data, such as cellular identifiers
     """
 
     field(:unique_id, String.t(), enforce: true)
@@ -71,6 +72,7 @@ defmodule PPNet.Message.Hello do
     field(:ppnet_version, String.t())
     field(:datetime, DateTime.t(), enforce: true)
     field(:capabilities, list(:brotli | :gzip | :heatshrink), default: [])
+    field(:extra, %{optional(String.t()) => any()}, default: %{})
   end
 
   @impl true
@@ -89,9 +91,11 @@ defmodule PPNet.Message.Hello do
         board_version: board_version,
         boot_id: boot_id,
         datetime: %DateTime{} = datetime,
-        capabilities: capabilities
+        capabilities: capabilities,
+        extra: extra
       })
-      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) and is_list(capabilities) do
+      when is_valid_types(unique_id, board_identifier, version, board_version, boot_id) and is_list(capabilities) and
+             is_map(extra) do
     case capabilities_to_bitfield(capabilities) do
       {:ok, capability_bitfield} ->
         fields = [
@@ -104,7 +108,12 @@ defmodule PPNet.Message.Hello do
           DateTime.to_unix(datetime)
         ]
 
-        fields = if capability_bitfield == 0, do: fields, else: fields ++ [capability_bitfield]
+        fields =
+          cond do
+            map_size(extra) > 0 -> fields ++ [capability_bitfield, extra]
+            capability_bitfield != 0 -> fields ++ [capability_bitfield]
+            true -> fields
+          end
 
         {:ok, Msgpax.pack!(fields, iodata: false)}
 
@@ -186,6 +195,33 @@ defmodule PPNet.Message.Hello do
        capabilities: capabilities_from_bitfield(capability_bitfield),
        datetime: DateTime.from_unix!(datetime)
      }}
+  end
+
+  def parse([
+        unique_id,
+        board_identifier,
+        version,
+        board_version,
+        boot_id,
+        ppnet_version,
+        datetime,
+        capability_bitfield,
+        extra
+      ])
+      when is_map(extra) do
+    with {:ok, hello} <-
+           parse([
+             unique_id,
+             board_identifier,
+             version,
+             board_version,
+             boot_id,
+             ppnet_version,
+             datetime,
+             capability_bitfield
+           ]) do
+      {:ok, %{hello | extra: extra}}
+    end
   end
 
   def parse(unpacked_body) when is_list(unpacked_body) do
