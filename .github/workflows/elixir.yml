@@ -18,7 +18,7 @@ jobs:
       PP_NET_FORCE_BUILD: "1"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: erlef/setup-beam@v1
         id: beam
