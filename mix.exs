@@ -66,7 +66,7 @@ defmodule PPNet.MixProject do
       {:reed_solomon_ex, "~> 0.2.0"},
       {:elixir_uuid, "~> 1.2"},
       {:brotli, "~> 0.3.3"},
-      {:elixir_make, "~> 0.9.0", runtime: false},
+      {:elixir_make, "~> 0.10.0", runtime: false},
       {:cc_precompiler, "~> 0.1.11", runtime: false},
       {:jsv, "~> 0.28.0"},
       {:nimble_options, "~> 1.1"},
