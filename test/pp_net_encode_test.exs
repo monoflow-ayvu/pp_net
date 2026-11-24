@@ -116,6 +116,49 @@ defmodule PpnetEncodeTest do
       end
     end
 
+    test "pack/1 writes capabilities before a non-empty open extra map" do
+      message = %Hello{
+        board_identifier: "Tester",
+        board_version: 17_185,
+        boot_id: 87_372_886,
+        unique_id: "TestRunner",
+        version: 4660,
+        datetime: ~U[2026-03-26 21:00:55Z],
+        extra: %{"imei" => "862092064056967", "future" => [1, true, nil]}
+      }
+
+      for {capabilities, bitfield} <- [{[], 0}, {[:gzip], 0b010}] do
+        message_with_capabilities = struct!(message, capabilities: capabilities)
+        assert {:ok, packed} = Hello.pack(message_with_capabilities)
+        unpacked = Msgpax.unpack!(packed)
+        assert length(unpacked) == 9
+        assert Enum.at(unpacked, 7) == bitfield
+        assert Enum.at(unpacked, 8) == message.extra
+
+        assert {:ok, frame} = PPNet.encode_message(message_with_capabilities)
+        expected = %{message_with_capabilities | ppnet_version: to_string(Application.spec(:pp_net, :vsn))}
+        assert %{messages: [^expected], errors: []} = PPNet.parse(frame)
+      end
+    end
+
+    test "pack/1 rejects non-map extra data" do
+      message = %Hello{
+        board_identifier: "Tester",
+        board_version: 17_185,
+        boot_id: 87_372_886,
+        unique_id: "TestRunner",
+        version: 4660,
+        datetime: ~U[2026-03-26 21:00:55Z]
+      }
+
+      for extra <- [-1, 1.0, "extra", nil, []] do
+        assert {:error, %PPNet.PackError{reason: :invalid_struct}} =
+                 message
+                 |> struct!(extra: extra)
+                 |> Hello.pack()
+      end
+    end
+
     test "message too large is split into chunks" do
       hello = %Hello{
         board_identifier: "Tester",

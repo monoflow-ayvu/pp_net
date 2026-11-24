@@ -582,8 +582,31 @@ defmodule PPNetTest do
     test "parse/1 rejects invalid eight-element capabilities" do
       base = ["UniqueId", "BoardId", 1, 1, 1, "0.2.0", DateTime.to_unix(~U[2026-03-27 11:33:02Z])]
 
-      for capabilities <- [-1, 1.0, "1", nil] do
+      for capabilities <- [-1, 1.0, "1", nil, %{"imei" => "862092064056967"}] do
         assert {:error, %PPNet.ParseError{reason: :unknown_format}} = Hello.parse(base ++ [capabilities])
+      end
+    end
+
+    test "parse/1 preserves an open extra map after capabilities" do
+      base = ["UniqueId", "BoardId", 1, 1, 1, "0.2.0", DateTime.to_unix(~U[2026-03-27 11:33:02Z])]
+
+      extra = %{
+        "imei" => "862092064056967",
+        "imsi" => "722070123456789",
+        "iccid" => "8950071234567890123",
+        "future" => %{"nested" => [1, true, nil]}
+      }
+
+      packed = Msgpax.pack!(base ++ [0b101, extra], iodata: false)
+
+      assert {:ok, %Hello{capabilities: [:brotli, :heatshrink], extra: ^extra}} = Hello.parse(packed)
+    end
+
+    test "parse/1 rejects a non-map ninth element" do
+      base = ["UniqueId", "BoardId", 1, 1, 1, "0.2.0", DateTime.to_unix(~U[2026-03-27 11:33:02Z])]
+
+      for extra <- [-1, 1.0, "extra", nil, []] do
+        assert {:error, %PPNet.ParseError{reason: :unknown_format}} = Hello.parse(base ++ [0, extra])
       end
     end
 
